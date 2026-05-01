@@ -107,6 +107,19 @@ export type TriageResponse = {
   safetyMode: boolean;
 };
 
+export type RoutePlanRequest = {
+  intake: IntakeRequest;
+  triage: TriageResponse;
+};
+
+export type RoutePlanResponse = {
+  overview: string;
+  deliverables: string[];
+  routeSteps: { phase: string; tasks: string[] }[];
+  fallbackPlan: string[];
+  teacherTalkingPoints: string[];
+};
+
 export type TriageFieldErrors = Partial<Record<keyof IntakeRequest, string>>;
 
 export const defaultIntakeValues: IntakeRequest = {

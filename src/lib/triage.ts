@@ -71,13 +71,18 @@ function detectSafetyMode(topicText: string): boolean {
 function classifyUserProfile(input: IntakeRequest): UserProfile {
   const anxious =
     input.currentBlocker === "不知道能不能做出来" ||
+    input.currentBlocker === "已经做了但感觉跑偏" ||
+    (input.deadline === "3 天内" && input.goalType === "完成交付材料") ||
     (input.deadline !== "更久" && anxietyWords.some((word) => input.topicText.includes(word)));
 
   if (anxious) {
     return "焦虑决策型";
   }
 
-  if (input.backgroundLevel === "能独立读论文或做实验") {
+  if (
+    input.backgroundLevel === "能独立读论文或做实验" ||
+    (input.backgroundLevel === "能写代码做 Demo" && input.taskType === "导师课题")
+  ) {
     return "科研能力型";
   }
 
@@ -98,7 +103,12 @@ function classifyUserProfile(input: IntakeRequest): UserProfile {
 }
 
 function classifyTaskCategory(input: IntakeRequest): TaskCategory {
-  if (input.currentBlocker === "看不懂题目" || input.goalType === "先看懂课题") {
+  if (
+    input.currentBlocker === "看不懂题目" ||
+    input.currentBlocker === "老师要求不清楚" ||
+    input.goalType === "先看懂课题" ||
+    input.goalType === "确定能不能做"
+  ) {
     return "课题理解";
   }
 
@@ -378,17 +388,28 @@ function recommendService(
     return "免费继续问";
   }
 
+  // 焦虑型：时间紧或已跑偏 → 需要高强度陪跑
   if (
     userProfile === "焦虑决策型" &&
-    (input.deadline === "3 天内" || input.goalType === "完成交付材料")
+    (input.deadline === "3 天内" || input.deadline === "1 周内" || input.goalType === "完成交付材料")
   ) {
     return "陪跑/审查包";
   }
 
-  if (userProfile === "科研能力型" && input.currentBlocker === "已经做了但感觉跑偏") {
+  // 科研能力型跑偏 → 审查包
+  if (
+    userProfile === "科研能力型" &&
+    (input.currentBlocker === "已经做了但感觉跑偏" || input.currentBlocker === "不知道能不能做出来")
+  ) {
     return "陪跑/审查包";
   }
 
+  // 科研能力型 + 文献入门 → 免费继续问（有能力自己推进，只需要方向）
+  if (userProfile === "科研能力型" && input.currentBlocker === "不知道查什么") {
+    return "免费继续问";
+  }
+
+  // 普通项目型 / 有明确交付目标 → 项目路线包
   if (
     userProfile === "普通项目型" ||
     input.goalType === "做出 MVP" ||
@@ -398,17 +419,25 @@ function recommendService(
     return "项目路线包";
   }
 
+  // 基础薄弱型有一定基础但缺路线 → 项目路线包
+  if (userProfile === "基础薄弱型") {
+    return "项目路线包";
+  }
+
+  // 小白型 / 看不懂 / 先理解 → 课题理解包
   if (
+    userProfile === "完全小白型" ||
     input.goalType === "先看懂课题" ||
     input.currentBlocker === "看不懂题目" ||
-    userProfile === "完全小白型"
+    input.currentBlocker === "老师要求不清楚"
   ) {
     return "课题理解包";
   }
 
+  // 科研能力型且只是查文献 → 免费继续问
   if (
-    input.currentBlocker === "不知道查什么" &&
-    input.backgroundLevel === "能独立读论文或做实验"
+    userProfile === "科研能力型" &&
+    input.currentBlocker === "不知道查什么"
   ) {
     return "免费继续问";
   }

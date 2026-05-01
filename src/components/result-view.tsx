@@ -6,11 +6,8 @@ import { useEffect, useState } from "react";
 import { loadJson, lastResultKey } from "../lib/storage";
 import type { TriageResponse } from "../lib/triage-types";
 
-type EntryMode = "route" | "free" | null;
-
 export function ResultView() {
   const [result, setResult] = useState<TriageResponse | null>(null);
-  const [entryMode, setEntryMode] = useState<EntryMode>(null);
 
   useEffect(() => {
     setResult(loadJson<TriageResponse>(lastResultKey));
@@ -99,32 +96,20 @@ export function ResultView() {
       <div className="panel cta-strip">
         <div>
           <span className="eyebrow">下一步入口</span>
-          <h2>保留商业化入口，但不把 Demo 做重</h2>
+          <h2>选择适合你的下一步</h2>
         </div>
 
         <div className="actions wrap-actions">
-          <button className="button button-primary" onClick={() => setEntryMode("route")} type="button">
+          <Link className="button button-primary" href="/route-plan">
             查看完整项目路线
-          </button>
-          <button className="button button-secondary" onClick={() => setEntryMode("free")} type="button">
-            继续免费问 3 个问题
+          </Link>
+          <button className="button button-secondary" disabled type="button">
+            继续免费问 3 个问题（即将开放）
           </button>
           <Link className="button button-ghost" href="/intake">
             重新填写
           </Link>
         </div>
-
-        {entryMode === "route" ? (
-          <p className="entry-note">
-            已预留“完整项目路线”入口。黑客松版先停在分诊结果，不展开后续路线生成。
-          </p>
-        ) : null}
-
-        {entryMode === "free" ? (
-          <p className="entry-note">
-            已预留“继续免费问”入口。黑客松版先展示入口，不接入多轮对话能力。
-          </p>
-        ) : null}
       </div>
     </section>
   );
