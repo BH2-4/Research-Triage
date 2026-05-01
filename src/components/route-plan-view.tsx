@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { lastIntakeKey, lastResultKey, lastRoutePlanKey, loadJson, saveJson } from "../lib/storage";
-import type { IntakeRequest, RoutePlanResponse, TriageResponse } from "../lib/triage-types";
+import { lastAiTriageKey, lastIntakeKey, lastResultKey, lastRoutePlanKey, loadJson, saveJson } from "../lib/storage";
+import type { AiTriageResponse, IntakeRequest, RoutePlanResponse, TriageResponse } from "../lib/triage-types";
 
 export function RoutePlanView() {
   const [plan, setPlan] = useState<RoutePlanResponse | null>(null);
@@ -19,15 +19,25 @@ export function RoutePlanView() {
     }
 
     const intake = loadJson<IntakeRequest>(lastIntakeKey);
-    const triage = loadJson<TriageResponse>(lastResultKey);
 
-    if (!intake || !triage) return;
+    // Try AI pipeline triage first, then fallback to rule-based
+    const aiTriage = loadJson<AiTriageResponse>(lastAiTriageKey);
+    const ruleTriage = loadJson<TriageResponse>(lastResultKey);
+
+    if (!intake) return;
+    if (!aiTriage && !ruleTriage) return;
 
     setLoading(true);
+
+    // Build request body — support both formats
+    const body = aiTriage
+      ? { intake, triage: aiTriage.triage, route: aiTriage.route }
+      : { intake, triage: ruleTriage };
+
     fetch("/api/triage/route-plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ intake, triage }),
+      body: JSON.stringify(body),
     })
       .then((res) => res.json())
       .then((data: RoutePlanResponse) => {

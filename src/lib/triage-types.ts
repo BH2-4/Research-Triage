@@ -130,3 +130,103 @@ export const defaultIntakeValues: IntakeRequest = {
   goalType: "先看懂课题",
   topicText: "",
 };
+
+// ─── P0 AI Pipeline Types ────────────────────────────────────────
+
+/** Structured input normalized from raw intake + topic text */
+export type NormalizedInput = {
+  topic: string;
+  taskType: string;
+  deadline: string;
+  userBackground: string;
+  painPoint: string;
+  targetOutput: string;
+  missingFields: string[];
+};
+
+/** A-E user type for the AI pipeline */
+export type UserTypeCode = "A" | "B" | "C" | "D" | "E";
+
+export const userTypeMap: Record<UserTypeCode, UserProfile> = {
+  A: "完全小白型",
+  B: "基础薄弱型",
+  C: "普通项目型",
+  D: "科研能力型",
+  E: "焦虑决策型",
+};
+
+export const userTypeReverseMap: Record<UserProfile, UserTypeCode> = {
+  完全小白型: "A",
+  基础薄弱型: "B",
+  普通项目型: "C",
+  科研能力型: "D",
+  焦虑决策型: "E",
+};
+
+export type TriageResult = {
+  userType: UserTypeCode;
+  secondaryType?: UserTypeCode;
+  confidence: number;
+  taskStage: string;
+  difficulty: "低" | "中" | "中高" | "高";
+  riskList: string[];
+  reason: string;
+};
+
+export type ClarificationDecision = {
+  needClarification: boolean;
+  questions: string[];
+  readyToGenerate: boolean;
+};
+
+export type AnswerRoute = {
+  answerMode:
+    | "plain_explain"
+    | "execution_focused"
+    | "mvp_planning"
+    | "research_review"
+    | "anxiety_reduction";
+  mustInclude: string[];
+  mustAvoid: string[];
+};
+
+export type GeneratedAnswer = {
+  answerText: string;
+  nextSteps: string[];
+  riskNotes: string[];
+  downgradePlan: string;
+  teacherScript: string;
+};
+
+export type QualityCheck = {
+  pass: boolean;
+  matchUserType: boolean;
+  hasNextStep: boolean;
+  hasRisk: boolean;
+  hasDowngradePlan: boolean;
+  tooComplex: boolean;
+  tooGeneric: boolean;
+  commercialRecommendationReasonable: boolean;
+  revisionInstruction: string;
+};
+
+export type ServiceRecommendation = {
+  recommendedService: string;
+  reason: string;
+  notRecommended: string;
+  cta: string;
+};
+
+/** Combined response from the AI triage endpoint */
+export type AiTriageResponse = {
+  normalized: NormalizedInput;
+  triage: TriageResult;
+  clarification: ClarificationDecision;
+  route: AnswerRoute;
+};
+
+/** Combined response from the generate-answer endpoint */
+export type GenerateAnswerResponse = {
+  answer: GeneratedAnswer;
+  quality: QualityCheck;
+};

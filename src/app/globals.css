@@ -154,6 +154,17 @@ textarea {
   font-size: 0.92rem;
 }
 
+.pill-highlight {
+  background: rgba(127, 41, 20, 0.08);
+  border-color: rgba(127, 41, 20, 0.25);
+  font-weight: 600;
+}
+
+.pill-dim {
+  opacity: 0.65;
+  font-size: 0.85rem;
+}
+
 .actions {
   display: flex;
   gap: 12px;
@@ -364,6 +375,69 @@ textarea {
   }
 }
 
+/* ─── AI Pipeline Result ──────────────────────────────────────── */
+
+.diagnosis-reason {
+  color: var(--text-dim);
+  line-height: 1.7;
+  margin-bottom: 16px;
+}
+
+.answer-text {
+  white-space: pre-wrap;
+  line-height: 1.85;
+  font-size: 1.05rem;
+}
+
+.teacher-quote {
+  border-left: 3px solid var(--accent);
+  padding: 12px 0 12px 18px;
+  margin: 0;
+  font-style: italic;
+  color: var(--text-dim);
+  line-height: 1.7;
+  background: rgba(127, 41, 20, 0.03);
+  border-radius: 0 8px 8px 0;
+}
+
+.card-full {
+  grid-column: 1 / -1;
+}
+
+/* ─── Loading Steps ──────────────────────────────────────────── */
+
+.loading-steps {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  text-align: left;
+}
+
+.loading-steps li {
+  padding: 6px 0 6px 24px;
+  position: relative;
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  animation: float-in 400ms ease both;
+}
+
+.loading-steps li:nth-child(1) { animation-delay: 0ms; }
+.loading-steps li:nth-child(2) { animation-delay: 300ms; }
+.loading-steps li:nth-child(3) { animation-delay: 600ms; }
+.loading-steps li:nth-child(4) { animation-delay: 900ms; }
+.loading-steps li:nth-child(5) { animation-delay: 1200ms; }
+
+.loading-steps li::before {
+  content: "⟳";
+  position: absolute;
+  left: 0;
+  animation: spin 1.2s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 @media (max-width: 900px) {
   .hero-layout,
   .result-grid,
@@ -376,6 +450,7 @@ textarea {
   .form-shell,
   .result-hero,
   .card-stack,
+  .card-full,
   .cta-strip,
   .empty-state {
     padding: 22px;

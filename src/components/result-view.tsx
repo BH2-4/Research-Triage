@@ -3,17 +3,38 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { loadJson, lastResultKey } from "../lib/storage";
-import type { TriageResponse } from "../lib/triage-types";
+import { loadJson, lastAiAnswerKey, lastAiTriageKey, lastResultKey } from "../lib/storage";
+import type {
+  AiTriageResponse,
+  GeneratedAnswer,
+  QualityCheck,
+  ServiceRecommendation,
+  TriageResponse,
+} from "../lib/triage-types";
+import { userTypeMap } from "../lib/triage-types";
+
+type AiAnswerPayload = {
+  answer: GeneratedAnswer;
+  quality: QualityCheck;
+  service: ServiceRecommendation;
+};
 
 export function ResultView() {
   const [result, setResult] = useState<TriageResponse | null>(null);
+  const [aiTriage, setAiTriage] = useState<AiTriageResponse | null>(null);
+  const [aiAnswer, setAiAnswer] = useState<AiAnswerPayload | null>(null);
 
   useEffect(() => {
     setResult(loadJson<TriageResponse>(lastResultKey));
+    setAiTriage(loadJson<AiTriageResponse>(lastAiTriageKey));
+    setAiAnswer(loadJson<AiAnswerPayload>(lastAiAnswerKey));
   }, []);
 
-  if (!result) {
+  // Use AI pipeline data if available, otherwise fallback to rule-based result
+  const hasAi = !!aiTriage && !!aiAnswer;
+  const effectiveResult = hasAi ? null : result;
+
+  if (!effectiveResult && !hasAi) {
     return (
       <section className="panel result-shell empty-state">
         <span className="eyebrow">暂无结果</span>
@@ -31,13 +52,133 @@ export function ResultView() {
     );
   }
 
+  // ─── AI Pipeline Result ──────────────────────────────────────
+  if (hasAi && aiTriage && aiAnswer) {
+    const { triage, route } = aiTriage;
+    const { answer, service } = aiAnswer;
+    const profileLabel = userTypeMap[triage.userType] ?? "用户";
+
+    return (
+      <section className="result-shell">
+        {/* Hero: Diagnosis Basis */}
+        <div className="panel result-hero">
+          <span className="eyebrow">AI 分诊结果</span>
+          <h1>你不是没思路，而是问题还没被拆开</h1>
+          <p className="diagnosis-reason">
+            <strong>诊断依据：</strong>
+            {triage.reason}
+          </p>
+          <div className="pill-row">
+            <span className="pill pill-highlight">类型：{profileLabel}</span>
+            <span className="pill">{triage.taskStage}</span>
+            <span className="pill">置信度：{Math.round(triage.confidence * 100)}%</span>
+            {triage.secondaryType ? (
+              <span className="pill pill-dim">次级：{userTypeMap[triage.secondaryType]}</span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="result-grid">
+          {/* Difficulty & Risks */}
+          <article className="panel card-stack">
+            <span className="eyebrow">难度与风险</span>
+            <h2>这些是你最该注意的点</h2>
+            <div className="difficulty-badge">难度：{triage.difficulty}</div>
+            <ul className="bullet-list">
+              {triage.riskList.map((risk) => (
+                <li key={risk}>{risk}</li>
+              ))}
+            </ul>
+            {answer.riskNotes.length > 0 ? (
+              <>
+                <h3 style={{ marginTop: "1rem" }}>补充风险提示</h3>
+                <ul className="bullet-list">
+                  {answer.riskNotes.map((note) => (
+                    <li key={note}>{note}</li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </article>
+
+          {/* Personalized Answer */}
+          <article className="panel card-stack card-full">
+            <span className="eyebrow">个性化回答 · {profileLabel}专属</span>
+            <h2>给你的分诊式回答</h2>
+            <div className="answer-text">{answer.answerText}</div>
+          </article>
+
+          {/* Next Steps */}
+          <article className="panel card-stack">
+            <span className="eyebrow">下一步行动</span>
+            <h2>按这个顺序做</h2>
+            <ol className="step-list">
+              {answer.nextSteps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          </article>
+
+          {/* Downgrade Plan */}
+          <article className="panel card-stack">
+            <span className="eyebrow">兜底方案</span>
+            <h2>如果做不出来，这样降级</h2>
+            <p>{answer.downgradePlan}</p>
+          </article>
+
+          {/* Teacher Script */}
+          <article className="panel card-stack">
+            <span className="eyebrow">沟通话术</span>
+            <h2>可以这样和老师说</h2>
+            <blockquote className="teacher-quote">{answer.teacherScript}</blockquote>
+          </article>
+
+          {/* Service Recommendation */}
+          <article className="panel card-stack card-full">
+            <span className="eyebrow">服务推荐</span>
+            <h2>{service.recommendedService}</h2>
+            <p>
+              <strong>推荐理由：</strong>
+              {service.reason}
+            </p>
+            <p className="muted" style={{ marginTop: "0.5rem" }}>
+              <strong>不推荐：</strong>
+              {service.notRecommended}
+            </p>
+            <div className="callout callout-soft" style={{ marginTop: "1rem" }}>
+              <strong>下一步行动：</strong> {service.cta}
+            </div>
+          </article>
+        </div>
+
+        <div className="panel cta-strip">
+          <div>
+            <span className="eyebrow">下一步入口</span>
+            <h2>选择适合你的下一步</h2>
+          </div>
+          <div className="actions wrap-actions">
+            <Link className="button button-primary" href="/intake">
+              重新诊断
+            </Link>
+            <Link className="button button-secondary" href="/">
+              返回首页
+            </Link>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // ─── Rule-Based Fallback Result ──────────────────────────────
+  if (!effectiveResult) return null;
+
   return (
     <section className="result-shell">
       <div className="panel result-hero">
         <span className="eyebrow">分诊结果</span>
         <h1>你不是没思路，而是问题还没被拆开</h1>
-        <p>{result.plainExplanation}</p>
-        {result.safetyMode ? (
+        <p>{effectiveResult.plainExplanation}</p>
+        {effectiveResult.safetyMode ? (
           <div className="callout callout-danger">
             <strong>已启用合规辅导模式：</strong>
             当前输入涉及学术诚信风险，结果仅提供真实交付、沟通和降级路径建议。
@@ -50,27 +191,27 @@ export function ResultView() {
           <span className="eyebrow">1. 当前状态</span>
           <h2>你现在处在哪一层</h2>
           <div className="pill-row">
-            <span className="pill">{result.userProfile}</span>
-            <span className="pill">{result.currentStage}</span>
-            <span className="pill">{result.taskCategory}</span>
+            <span className="pill">{effectiveResult.userProfile}</span>
+            <span className="pill">{effectiveResult.currentStage}</span>
+            <span className="pill">{effectiveResult.taskCategory}</span>
           </div>
           <p className="muted">
-            当前主要卡点已经被归入 <strong>{result.taskCategory}</strong>，后续建议会优先围绕这类问题展开。
+            当前主要卡点已经被归入 <strong>{effectiveResult.taskCategory}</strong>，后续建议会优先围绕这类问题展开。
           </p>
         </article>
 
         <article className="panel card-stack">
           <span className="eyebrow">2. 课题人话解释</span>
           <h2>先理解问题，再决定路线</h2>
-          <p>{result.plainExplanation}</p>
+          <p>{effectiveResult.plainExplanation}</p>
         </article>
 
         <article className="panel card-stack">
           <span className="eyebrow">3. 难度与风险</span>
           <h2>别先追模型，先看失败点</h2>
-          <div className="difficulty-badge">难度：{result.difficulty}</div>
+          <div className="difficulty-badge">难度：{effectiveResult.difficulty}</div>
           <ul className="bullet-list">
-            {result.riskList.map((risk) => (
+            {effectiveResult.riskList.map((risk) => (
               <li key={risk}>{risk}</li>
             ))}
           </ul>
@@ -80,7 +221,7 @@ export function ResultView() {
           <span className="eyebrow">4. 最低可行路径</span>
           <h2>下一步必须具体</h2>
           <ol className="step-list">
-            {result.minimumPath.map((step) => (
+            {effectiveResult.minimumPath.map((step) => (
               <li key={step}>{step}</li>
             ))}
           </ol>
@@ -88,8 +229,8 @@ export function ResultView() {
 
         <article className="panel card-stack">
           <span className="eyebrow">5. 推荐服务</span>
-          <h2>{result.recommendedService}</h2>
-          <p>{result.serviceReason}</p>
+          <h2>{effectiveResult.recommendedService}</h2>
+          <p>{effectiveResult.serviceReason}</p>
         </article>
       </div>
 

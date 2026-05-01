@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { startTransition, useEffect, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 
-import { loadJson, lastIntakeKey, lastResultKey, saveJson } from "../lib/storage";
+import { loadJson, lastAiAnswerKey, lastAiTriageKey, lastIntakeKey, saveJson } from "../lib/storage";
 import {
   backgroundLevels,
   currentBlockers,
@@ -13,12 +13,12 @@ import {
   goalTypes,
   intakeSchema,
   taskTypes,
+  type AiTriageResponse,
   type IntakeRequest,
   type TriageFieldErrors,
-  type TriageResponse,
 } from "../lib/triage-types";
 
-type PendingState = "idle" | "submitting" | "error";
+type PendingState = "idle" | "submitting" | "clarifying" | "generating" | "error";
 
 function getIssueMap(input: IntakeRequest): TriageFieldErrors {
   const parsed = intakeSchema.safeParse(input);
@@ -42,6 +42,9 @@ export function IntakeForm() {
   const [errors, setErrors] = useState<TriageFieldErrors>({});
   const [pendingState, setPendingState] = useState<PendingState>("idle");
   const [networkError, setNetworkError] = useState("");
+  const [clarificationQuestions, setClarificationQuestions] = useState<string[]>([]);
+  const [clarificationAnswers, setClarificationAnswers] = useState<string[]>([]);
+  const triageRef = useRef<AiTriageResponse | null>(null);
 
   useEffect(() => {
     const savedDraft = loadJson<IntakeRequest>(lastIntakeKey);
@@ -55,6 +58,14 @@ export function IntakeForm() {
     setErrors((current) => {
       const next = { ...current };
       delete next[key];
+      return next;
+    });
+  };
+
+  const updateClarificationAnswer = (index: number, value: string) => {
+    setClarificationAnswers((current) => {
+      const next = [...current];
+      next[index] = value;
       return next;
     });
   };
@@ -73,15 +84,13 @@ export function IntakeForm() {
     saveJson(lastIntakeKey, form);
 
     try {
-      const response = await fetch("/api/triage/intake", {
+      const response = await fetch("/api/triage", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
 
-      const payload = (await response.json()) as TriageResponse | { error?: string };
+      const payload = (await response.json()) as AiTriageResponse | { error?: string };
 
       if (!response.ok) {
         const message =
@@ -91,14 +100,23 @@ export function IntakeForm() {
         throw new Error(message);
       }
 
-      if (!("userProfile" in payload)) {
+      if (!("triage" in payload)) {
         throw new Error("系统返回的数据格式不完整，请稍后再试。");
       }
 
-      saveJson(lastResultKey, payload);
-      startTransition(() => {
-        router.push("/result");
-      });
+      triageRef.current = payload;
+      saveJson(lastAiTriageKey, payload);
+
+      // If clarification needed, switch to clarifying state
+      if (payload.clarification?.needClarification && payload.clarification.questions.length > 0) {
+        setClarificationQuestions(payload.clarification.questions);
+        setClarificationAnswers(new Array(payload.clarification.questions.length).fill(""));
+        setPendingState("clarifying");
+        return;
+      }
+
+      // No clarification needed → proceed to generate answer
+      await runGenerateAnswer(payload);
     } catch (error) {
       setPendingState("error");
       setNetworkError(
@@ -107,19 +125,159 @@ export function IntakeForm() {
     }
   };
 
+  const handleClarifySubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const triage = triageRef.current;
+    if (!triage) return;
+
+    // Check at least one answer is non-empty
+    const hasAnswer = clarificationAnswers.some((a) => a.trim().length > 0);
+    if (!hasAnswer) return;
+
+    setPendingState("generating");
+    setNetworkError("");
+
+    // Re-run triage with answers appended to topic
+    try {
+      const answersText = clarificationAnswers
+        .map((a, i) => `Q: ${clarificationQuestions[i]}\nA: ${a}`)
+        .join("\n\n");
+      const updatedForm = { ...form, topicText: `${form.topicText}\n\n[追问回答]\n${answersText}` };
+
+      const response = await fetch("/api/triage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedForm),
+      });
+
+      const payload = (await response.json()) as AiTriageResponse | { error?: string };
+
+      if (!response.ok || !("triage" in payload)) {
+        throw new Error("error" in payload ? String(payload.error) : "分诊失败");
+      }
+
+      triageRef.current = payload;
+      saveJson(lastAiTriageKey, payload);
+      await runGenerateAnswer(payload);
+    } catch (error) {
+      setPendingState("error");
+      setNetworkError(
+        error instanceof Error ? error.message : "系统暂时没能生成回答，请稍后再试。",
+      );
+    }
+  };
+
+  const runGenerateAnswer = async (triage: AiTriageResponse) => {
+    setPendingState("generating");
+
+    try {
+      const response = await fetch("/api/generate-answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          normalized: triage.normalized,
+          triage: triage.triage,
+          route: triage.route,
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          payload && typeof payload === "object" && "error" in payload
+            ? String(payload.error)
+            : "回答生成失败",
+        );
+      }
+
+      saveJson(lastAiAnswerKey, payload);
+      startTransition(() => {
+        router.push("/result");
+      });
+    } catch (error) {
+      setPendingState("error");
+      setNetworkError(
+        error instanceof Error ? error.message : "系统暂时没能生成回答，请稍后再试。",
+      );
+    }
+  };
+
+  const isLoading = pendingState === "submitting" || pendingState === "generating";
+
   return (
     <>
-      {pendingState === "submitting" ? (
+      {isLoading ? (
         <div className="loading-overlay" role="status" aria-live="polite">
           <div className="loading-panel">
-            <span className="eyebrow">正在分诊</span>
-            <h2>正在整理你的课题状态</h2>
-            <p>系统会先判断你是谁、卡在哪里，再生成第一步和推荐路径。</p>
+            <span className="eyebrow">
+              {pendingState === "submitting" ? "正在分析" : "正在生成回答"}
+            </span>
+            <h2>
+              {pendingState === "submitting"
+                ? "正在理解你的课题状态"
+                : "正在为你生成个性化回答"}
+            </h2>
+            {pendingState === "submitting" ? (
+              <ul className="loading-steps" aria-label="分析步骤">
+                <li>正在理解课题…</li>
+                <li>正在判断你的基础…</li>
+                <li>正在识别当前卡点…</li>
+                <li>正在评估风险…</li>
+                <li>正在选择回答方式…</li>
+              </ul>
+            ) : (
+              <p>根据你的用户类型、任务阶段和风险等级，生成最适合你的回答。</p>
+            )}
           </div>
         </div>
       ) : null}
 
-      <form className="panel form-shell" onSubmit={handleSubmit} noValidate>
+      {pendingState === "clarifying" ? (
+        <form className="panel form-shell" onSubmit={handleClarifySubmit} noValidate>
+          <div className="section-heading">
+            <span className="eyebrow">补充信息</span>
+            <h1>再确认几个关键问题，让回答更准</h1>
+            <p>
+              系统需要多了解一些信息，才能给出更精准的判断和路线。请尽可能回答以下问题。
+            </p>
+          </div>
+
+          {clarificationQuestions.map((question, i) => (
+            <Field
+              key={i}
+              label={`${i + 1}. ${question}`}
+              control={
+                <textarea
+                  value={clarificationAnswers[i] ?? ""}
+                  onChange={(e) => updateClarificationAnswer(i, e.target.value)}
+                  rows={2}
+                  placeholder="输入你的回答…"
+                />
+              }
+            />
+          ))}
+
+          <div className="actions">
+            <button className="button button-primary" type="submit">
+              提交并生成回答
+            </button>
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={async () => {
+                if (triageRef.current) {
+                  setPendingState("generating");
+                  await runGenerateAnswer(triageRef.current);
+                }
+              }}
+            >
+              跳过，直接生成
+            </button>
+          </div>
+        </form>
+      ) : (
+        <form className="panel form-shell" onSubmit={handleSubmit} noValidate>
         <div className="section-heading">
           <span className="eyebrow">第一步</span>
           <h1>先把课题说清楚，再决定怎么做</h1>
@@ -259,6 +417,7 @@ export function IntakeForm() {
           </Link>
         </div>
       </form>
+      )}
     </>
   );
 }
