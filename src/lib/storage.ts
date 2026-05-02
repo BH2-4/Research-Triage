@@ -3,6 +3,7 @@ export const lastResultKey = "triage:last-result";
 export const lastRoutePlanKey = "triage:last-route-plan";
 export const lastAiTriageKey = "triage:ai-triage";
 export const lastAiAnswerKey = "triage:ai-answer";
+export const lastPlanStateKey = "triage:plan-state";
 
 export function saveJson(key: string, value: unknown) {
   if (typeof window === "undefined") {

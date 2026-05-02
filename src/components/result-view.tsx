@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { loadJson, lastAiAnswerKey, lastAiTriageKey, lastResultKey } from "../lib/storage";
+import { loadJson, lastAiAnswerKey, lastAiTriageKey, lastPlanStateKey, lastResultKey, saveJson } from "../lib/storage";
 import type {
   AiTriageResponse,
   GeneratedAnswer,
@@ -12,7 +12,40 @@ import type {
   TriageResponse,
 } from "../lib/triage-types";
 import { userTypeMap } from "../lib/triage-types";
+import { PlanCard, type PlanOption } from "./plan-card";
 
+
+const defaultPlanOptions: PlanOption[] = [
+  {
+    id: "A",
+    title: "直接生成首页结构",
+    description: "适合已经知道自己要展示什么的团队，直接进入页面模块输出。",
+    actionHint: "P0 先做输入区、Plan 卡片、结果区三块，今天内可出线框。",
+  },
+  {
+    id: "B",
+    title: "先拆解首页目标",
+    description: "先明确首页是给谁看的，再决定讲创新、痛点还是商业价值。",
+    actionHint: "先锁定“黑客松评委”场景，只保留可展示和可验证的信息。",
+    split: [
+      { id: "B1", title: "面向评委", description: "", actionHint: "" },
+      { id: "B2", title: "面向用户", description: "", actionHint: "" },
+      { id: "B3", title: "面向团队", description: "", actionHint: "" },
+    ],
+  },
+  {
+    id: "C",
+    title: "先看竞品和参考",
+    description: "先收集 3-5 个参考案例，降低设计和信息结构决策成本。",
+    actionHint: "先做竞品卡片摘要，再抽取可复用模块，避免直接抄界面。",
+  },
+  {
+    id: "D",
+    title: "先做黑客松 MVP",
+    description: "先做可演示最小闭环：输入目标 → 生成 Plan → 输出结果卡片。",
+    actionHint: "推荐路径：D1 输入框 → D2 Plan 卡片 → D3 结果卡片 → D4 保存资料包。",
+  },
+];
 type AiAnswerPayload = {
   answer: GeneratedAnswer;
   quality: QualityCheck;
@@ -23,11 +56,13 @@ export function ResultView() {
   const [result, setResult] = useState<TriageResponse | null>(null);
   const [aiTriage, setAiTriage] = useState<AiTriageResponse | null>(null);
   const [aiAnswer, setAiAnswer] = useState<AiAnswerPayload | null>(null);
+  const [selectedPath, setSelectedPath] = useState<string[]>([]);
 
   useEffect(() => {
     setResult(loadJson<TriageResponse>(lastResultKey));
     setAiTriage(loadJson<AiTriageResponse>(lastAiTriageKey));
     setAiAnswer(loadJson<AiAnswerPayload>(lastAiAnswerKey));
+    setSelectedPath(loadJson<string[]>(lastPlanStateKey) ?? []);
   }, []);
 
   // Use AI pipeline data if available, otherwise fallback to rule-based result
@@ -52,9 +87,38 @@ export function ResultView() {
     );
   }
 
+  const renderPlanWorkspace = () => (
+    <>
+      <PlanCard
+        goal="优化科研课题分诊台首页并形成可展示 MVP"
+        recommendation="推荐 D：先做黑客松 MVP，范围最小、最容易展示。"
+        options={defaultPlanOptions}
+        onSelect={(optionId) => {
+          const nextPath = [...selectedPath, optionId].slice(-8);
+          setSelectedPath(nextPath);
+          saveJson(lastPlanStateKey, nextPath);
+        }}
+      />
+
+      <article className="panel card-stack">
+        <span className="eyebrow">当前 Plan 路径</span>
+        <h2>你已经做出的选择</h2>
+        {selectedPath.length ? (
+          <ol className="step-list">
+            {selectedPath.map((item, index) => (
+              <li key={`${item}-${index}`}>{item}</li>
+            ))}
+          </ol>
+        ) : (
+          <p className="muted">还未选择路径。你可以在上方 Plan 卡片中选择 A/B/C/D。</p>
+        )}
+      </article>
+    </>
+  );
+
   // ─── AI Pipeline Result ──────────────────────────────────────
   if (hasAi && aiTriage && aiAnswer) {
-    const { triage, route } = aiTriage;
+    const { triage } = aiTriage;
     const { answer, service } = aiAnswer;
     const profileLabel = userTypeMap[triage.userType] ?? "用户";
 
@@ -150,6 +214,8 @@ export function ResultView() {
             </div>
           </article>
         </div>
+
+        {renderPlanWorkspace()}
 
         <div className="panel cta-strip">
           <div>
@@ -252,6 +318,8 @@ export function ResultView() {
           </Link>
         </div>
       </div>
+
+      {renderPlanWorkspace()}
     </section>
   );
 }
