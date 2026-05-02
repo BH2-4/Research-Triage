@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { marked } from "marked";
+import { useEffect, useMemo, useState } from "react";
+import { MarkdownBlock } from "./markdown-block";
 
 type DocData = {
   filename: string;
@@ -22,6 +22,7 @@ export function DocPanel({ sessionId, activeFile, onClose }: Props) {
   const [doc, setDoc] = useState<DocData | null>(null);
   const [loading, setLoading] = useState(false);
   const [opening, setOpening] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
     if (!activeFile || !sessionId) {
@@ -33,6 +34,7 @@ export function DocPanel({ sessionId, activeFile, onClose }: Props) {
     let cancelled = false;
     setLoading(true);
     setOpening(false);
+    setImageFailed(false);
 
     fetch(`/api/userspace/${encodeURIComponent(sessionId)}/${encodeURIComponent(activeFile)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
@@ -50,6 +52,23 @@ export function DocPanel({ sessionId, activeFile, onClose }: Props) {
       cancelled = true;
     };
   }, [activeFile, sessionId]);
+
+  const isCode = doc?.type === "code";
+  const isImage = doc?.type === "image";
+  const imageMeta = useMemo(() => {
+    if (!isImage || !doc) return null;
+    try {
+      return JSON.parse(doc.content) as {
+        title?: string;
+        url?: string;
+        source?: string;
+        caption?: string;
+        alt?: string;
+      };
+    } catch {
+      return null;
+    }
+  }, [doc, isImage]);
 
   if (!activeFile) {
     return (
@@ -82,7 +101,6 @@ export function DocPanel({ sessionId, activeFile, onClose }: Props) {
   const encodedFile = encodeURIComponent(doc.filename);
   const fileUrl = `/api/userspace/${encodedSession}/${encodedFile}`;
   const rawUrl = `${fileUrl}?raw=1`;
-  const isCode = doc.type === "code";
 
   async function openWithSystemDefault() {
     setOpening(true);
@@ -122,13 +140,28 @@ export function DocPanel({ sessionId, activeFile, onClose }: Props) {
       <h3 className="doc-title">{doc.title}</h3>
       {isCode && doc.language && <span className="doc-code-lang">{doc.language}</span>}
       <time className="doc-time">{new Date(doc.createdAt).toLocaleString("zh-CN")}</time>
-      {isCode ? (
+      {isImage && imageMeta?.url ? (
+        <div className="doc-image-preview">
+          {imageFailed ? (
+            <span className="markdown-image-error">图片加载失败</span>
+          ) : (
+            <img
+              src={imageMeta.url}
+              alt={imageMeta.alt ?? imageMeta.title ?? doc.title}
+              referrerPolicy="no-referrer"
+              onError={() => setImageFailed(true)}
+            />
+          )}
+          {(imageMeta.caption || imageMeta.source) && (
+            <p className="markdown-image-caption">
+              {[imageMeta.caption, imageMeta.source].filter(Boolean).join(" · ")}
+            </p>
+          )}
+        </div>
+      ) : isCode ? (
         <pre className="doc-code-block"><code>{doc.content}</code></pre>
       ) : (
-        <div
-          className="doc-body plan-md"
-          dangerouslySetInnerHTML={{ __html: marked.parse(doc.content) }}
-        />
+        <MarkdownBlock className="doc-body plan-md" content={doc.content} />
       )}
     </div>
   );

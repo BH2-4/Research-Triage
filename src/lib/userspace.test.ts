@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getExistingFilePath, getManifest, readFile, saveCodeFile, saveMarkdownDocument, savePlan, writeFile } from "./userspace";
+import { getExistingFilePath, getManifest, readFile, readSessionState, saveCodeFile, saveImageArtifact, saveMarkdownDocument, savePlan, saveSessionState, writeFile } from "./userspace";
 
 describe("userspace", () => {
   it("writes, reads, and records plan files", () => {
@@ -60,6 +60,71 @@ describe("userspace", () => {
         language: "python",
       }),
     );
+  });
+
+  it("records image artifact metadata for preview", () => {
+    const sessionId = `image-${Date.now()}`;
+
+    saveImageArtifact(sessionId, {
+      filename: "image-v1-reference.json",
+      title: "Reference Image",
+      url: "https://example.com/image.png",
+      caption: "示意图",
+      source: "example.com",
+      alt: "reference",
+      version: 1,
+    });
+
+    expect(readFile(sessionId, "image-v1-reference.json")).toContain("https://example.com/image.png");
+    expect(getManifest(sessionId)).toContainEqual(
+      expect.objectContaining({
+        filename: "image-v1-reference.json",
+        title: "Reference Image",
+        type: "image",
+        version: 1,
+        url: "https://example.com/image.png",
+        caption: "示意图",
+      }),
+    );
+  });
+
+  it("saves and reads machine-readable session state", () => {
+    const sessionId = `state-${Date.now()}`;
+
+    saveSessionState(sessionId, {
+      profile: {
+        ageOrGeneration: "Z 世代",
+        educationLevel: "本科",
+        toolAbility: "会基础工具",
+        aiFamiliarity: "常用 AI",
+        researchFamiliarity: "新手",
+        interestArea: "AI 教育",
+        currentBlocker: "不知道怎么开始",
+        deviceAvailable: "电脑",
+        timeAvailable: "一周",
+        explanationPreference: "简单解释",
+      },
+      profileConfidence: { interestArea: 1 },
+      phase: "reviewing",
+      progress: {
+        phase: "reviewing",
+        currentPlanVersion: 2,
+        updatedAt: "2026-05-03T00:00:00.000Z",
+      },
+      preference: {
+        explanationPreference: "简单解释",
+        interactionPreference: "button",
+        outputDetail: "simple",
+        updatedAt: "2026-05-03T00:00:00.000Z",
+      },
+      updatedAt: "2026-05-03T00:00:00.000Z",
+    });
+
+    expect(readSessionState(sessionId)).toMatchObject({
+      phase: "reviewing",
+      progress: { currentPlanVersion: 2 },
+      preference: { outputDetail: "simple" },
+    });
   });
 
   it("filters stale manifest entries whose files no longer exist", () => {

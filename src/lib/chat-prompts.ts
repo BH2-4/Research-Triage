@@ -25,9 +25,10 @@ export function buildChatSystemPrompt(
   phase: Phase,
   instruction: string,
   plan?: PlanState,
+  selectedSkills?: string[],
 ): string {
   const stateBlock = buildStateContext(memory, phase, plan);
-  const skillsBlock = buildSystemPrompt("");
+  const skillsBlock = buildSystemPrompt("", selectedSkills);
   return `${skillsBlock}
 
 ## 当前任务
@@ -44,7 +45,8 @@ const GREETING_INSTRUCTION = `你是「人人都能做科研」的科研启蒙�
 你必须返回严格 JSON：
 {
   "reply": "你的开场白（1-2句，不许包含问号或疑问句）",
-  "questions": ["完整选项文本A", "完整选项文本B", "完整选项文本C", "我不太理解这些，帮我找方向"]
+  "questions": ["完整选项文本A", "完整选项文本B", "完整选项文本C", "我不太理解这些，帮我找方向"],
+  "choiceGroups": []
 }
 
 【reply 规则】
@@ -70,6 +72,15 @@ const PROFILING_INSTRUCTION = `你是「人人都能做科研」的科研启蒙�
 {
   "reply": "你的回复文本",
   "questions": ["完整选项A", "完整选项B", "完整选项C", "我不太理解这些，帮我找方向"],
+  "choiceGroups": [
+    {
+      "id": "group-id",
+      "mode": "single 或 multiple",
+      "prompt": "这组选项要确认什么",
+      "options": [{"id": "a", "label": "按钮文案", "value": "用户选择后的含义"}],
+      "confirmLabel": "确认选择"
+    }
+  ],
   "profileUpdates": [
     {"field": "字段名", "value": "值", "confidence": 0.3-1.0}
   ]
@@ -96,6 +107,8 @@ const PROFILING_INSTRUCTION = `你是「人人都能做科研」的科研启蒙�
 【questions 规则】
 - 2-4个完整、确定的选项，每个选项是一句用户点击即选中的完整句子
 - 选项必须互斥、覆盖用户可能的选择范围
+- 如果同一个问题允许用户同时选择多个兴趣、工具、困难或方向，在 choiceGroups 中输出 mode="multiple"
+- 如果不需要多选，choiceGroups 可为空数组，系统会使用 questions 渲染单选按钮
 - 禁止占位符文本（如"选项C""其他""请选择"）
 - 必须包含"我不太理解这些，帮我找方向"作为最后一项
 - 示例（正确）：["我完全没接触过，从零开始", "我了解一些基础概念", "我有一定实践经验", "我不太理解这些，帮我找方向"]
@@ -106,6 +119,7 @@ const PROFILING_INSTRUCTION = `你是「人人都能做科研」的科研启蒙�
 - 每次提取你有把握的字段即可，不需要一次全提取
 - confidence: 0.3=猜测, 0.5=AI推断, 0.7=用户暗示, 1.0=用户明确说了
 - 不确定的字段不要填，留到下一轮通过 questions 追问
+- 用户要求修改画像或记忆时，必须先列出要确认的字段并让用户确认；只有用户明确确认的新值才能用 confidence=1.0 覆盖旧值
 - profileUpdates 可以为空数组 []
 
 【最终指令】
@@ -130,6 +144,7 @@ const CLARIFYING_INSTRUCTION = `你是「人人都能做科研」的科研启蒙
 {
   "reply": "列出待确认的假设，或说明所有项已通过",
   "questions": ["追问选项A", "追问选项B", "我不太理解这些，帮我找方向"],
+  "choiceGroups": [],
   "checklistPassed": false
 }
 
@@ -160,6 +175,15 @@ const PLAN_JSON_SCHEMA = `{
       "language": "matlab/python/typescript 等",
       "content": "文件完整内容"
     }
+  ],
+  "images": [
+    {
+      "title": "图片标题",
+      "url": "https://example.com/image.png",
+      "source": "来源名称或域名",
+      "caption": "图片说明",
+      "alt": "替代文本"
+    }
   ]
 }`;
 
@@ -177,6 +201,8 @@ ${PLAN_JSON_SCHEMA}
 - 当任务明确需要代码、脚本、配置文件、Demo 骨架时，必须输出 "codeFiles"
 - "codeFiles" 中每个文件都必须是最小可运行或最小可验证版本，"content" 写完整代码，不要写解释
 - 如果当前任务不需要代码，返回 {"codeFiles": []}
+- 当图片、流程图、结构图、对比图能明显降低理解成本时，可输出 "images"；只允许 http/https 图片 URL
+- 如果当前任务不需要图片，返回 {"images": []}
 - reply 不得重复完整 Plan 内容`;
 
 const REVIEWING_INSTRUCTION = `你是「人人都能做科研」的科研启蒙引导者。用户正在挑战或调整已有 Plan。

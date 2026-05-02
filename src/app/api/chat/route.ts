@@ -6,6 +6,9 @@ import {
   buildFallbackTurn,
   buildProcessSummary,
   extractCodeFilesFromParsed,
+  extractImageArtifactsFromParsed,
+  inferChoiceMode,
+  normalizeChoiceGroups,
   extractPlanFromParsed,
   extractQuestionsFromText,
   getNextPhase,
@@ -21,6 +24,7 @@ import {
   getInstructionForPhase,
   PLANNING_INSTRUCTION,
 } from "../../../lib/chat-prompts";
+import { selectSkills } from "../../../lib/skills";
 import {
   createEmptyProfile,
   getDetectedFields,
@@ -30,20 +34,32 @@ import {
   updateField,
   type UserProfileMemory,
 } from "../../../lib/memory";
-import { getManifest, readFile, saveProfile } from "../../../lib/userspace";
-import type { ChatMessage, Phase, PlanState, UserProfileState } from "../../../lib/triage-types";
+import { getManifest, readFile, readSessionState, saveProfile, saveSessionState } from "../../../lib/userspace";
+import type {
+  ChatMessage,
+  ChoiceGroup,
+  PersistedSessionState,
+  Phase,
+  PlanState,
+  PreferenceMemory,
+  ProgressMemory,
+  PromptState,
+  UserProfileState,
+} from "../../../lib/triage-types";
 
 // ─── In-memory session store ──────────────────────────────────────
 
-const sessions = new Map<
-  string,
-  {
-    messages: ChatMessage[];
-    memory: UserProfileMemory;
-    phase: Phase;
-    plan?: PlanState;
-  }
->();
+type SessionState = {
+  messages: ChatMessage[];
+  memory: UserProfileMemory;
+  phase: Phase;
+  plan?: PlanState;
+  progress: ProgressMemory;
+  preference: PreferenceMemory;
+  promptState?: PromptState;
+};
+
+const sessions = new Map<string, SessionState>();
 
 function shortSessionId(sessionId: string): string {
   return sessionId.slice(0, 8);
@@ -63,6 +79,108 @@ function logChatEvent(
   console.log(
     `[api/chat] sid=${shortSessionId(sessionId)} phase=${phase} event=${event}${detailText ? ` ${detailText}` : ""}`,
   );
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function createProgress(phase: Phase, plan?: PlanState): ProgressMemory {
+  return {
+    phase,
+    currentPlanVersion: plan?.version,
+    updatedAt: nowIso(),
+  };
+}
+
+function createPreference(memory?: UserProfileMemory): PreferenceMemory {
+  const explanationPreference = memory?.explanationPreference?.value || undefined;
+  return {
+    explanationPreference,
+    interactionPreference: "button",
+    outputDetail: explanationPreference?.includes("专业")
+      ? "professional"
+      : explanationPreference?.includes("简单") || explanationPreference?.includes("小白")
+        ? "simple"
+        : "balanced",
+    updatedAt: nowIso(),
+  };
+}
+
+function updateSessionProgress(session: SessionState, message: string): void {
+  session.progress = {
+    ...session.progress,
+    phase: session.phase,
+    currentPlanVersion: session.plan?.version,
+    lastUserMessage: message,
+    lastChoiceSummary: message.startsWith("我选择了") || message.includes("：")
+      ? message
+      : session.progress.lastChoiceSummary,
+    updatedAt: nowIso(),
+  };
+}
+
+function updateSessionPreference(session: SessionState, message: string): void {
+  const explanationPreference = session.memory.explanationPreference.value || session.preference.explanationPreference;
+  const outputDetail = message.includes("更专业")
+    ? "professional"
+    : message.includes("更简单") || message.includes("小白")
+      ? "simple"
+      : session.preference.outputDetail ?? "balanced";
+  const interactionPreference = message.startsWith("我选择了")
+    ? "multi_select"
+    : message.length > 24
+      ? "free_text"
+      : "button";
+
+  session.preference = {
+    explanationPreference,
+    outputDetail,
+    interactionPreference,
+    updatedAt: nowIso(),
+  };
+}
+
+function applyPersistedProfile(
+  memory: UserProfileMemory,
+  state: PersistedSessionState | null,
+): UserProfileMemory {
+  if (!state?.profile) return memory;
+  let next = memory;
+  for (const [field, value] of Object.entries(state.profile) as [keyof UserProfileState, string][]) {
+    if (!value || !(field in next)) continue;
+    const confidence = state.profileConfidence?.[field] ?? 0.7;
+    next = updateField(
+      next,
+      field,
+      value,
+      confidence >= 1 ? "user_confirmed" : confidence >= 0.7 ? "deduced" : "inferred",
+      confidence,
+    );
+  }
+  return next;
+}
+
+function persistSessionState(sessionId: string, session: SessionState): void {
+  const profile = getDetectedFields(session.memory).length > 0
+    ? toAPIState(session.memory)
+    : undefined;
+  const profileConfidence = profile
+    ? Object.fromEntries(
+        Object.entries(session.memory).map(([k, f]) => [k, (f as { confidence: number }).confidence]),
+      )
+    : undefined;
+
+  saveSessionState(sessionId, {
+    profile,
+    profileConfidence,
+    phase: session.phase,
+    progress: session.progress,
+    preference: session.preference,
+    promptState: session.promptState,
+    currentPlanVersion: session.plan?.version,
+    updatedAt: nowIso(),
+  });
 }
 
 // ─── Route handler ────────────────────────────────────────────────
@@ -88,16 +206,21 @@ export async function POST(request: Request) {
       const hasFiles = manifest.length > 0;
 
       if (hasFiles) {
+        const persisted = readSessionState(sessionId);
         // Rebuild session from disk data
+        const restoredMemory = applyPersistedProfile(createEmptyProfile(), persisted);
         session = {
           messages: [],
-          memory: createEmptyProfile(),
-          phase: "profiling", // was past greeting
+          memory: restoredMemory,
+          phase: persisted?.phase ?? "profiling", // was past greeting
+          progress: persisted?.progress ?? createProgress(persisted?.phase ?? "profiling"),
+          preference: persisted?.preference ?? createPreference(restoredMemory),
+          promptState: persisted?.promptState,
         };
 
-        // Try to restore profile from disk if exists
+        // Try markdown profile as a fallback if machine-readable state is missing.
         const profileRaw = readFile(sessionId, "profile.md");
-        if (profileRaw) {
+        if (profileRaw && !persisted?.profile) {
           // Rebuild a basic profile from markdown
           const pmdMatch = profileRaw.match(/- [✅🔍❓] \*\*(.+?)\*\*: (.+)/g);
           if (pmdMatch) {
@@ -140,6 +263,17 @@ export async function POST(request: Request) {
         } else {
           session.phase = "profiling";
         }
+        session.progress = {
+          ...session.progress,
+          phase: session.phase,
+          currentPlanVersion: session.plan?.version,
+          updatedAt: nowIso(),
+        };
+        session.preference = {
+          ...session.preference,
+          explanationPreference: session.memory.explanationPreference.value || session.preference.explanationPreference,
+          updatedAt: nowIso(),
+        };
 
         console.log(`[api/chat] Session ${sessionId.slice(0, 8)} recovered from disk (phase=${session.phase})`);
       } else {
@@ -148,6 +282,8 @@ export async function POST(request: Request) {
           messages: [],
           memory: createEmptyProfile(),
           phase: "greeting",
+          progress: createProgress("greeting"),
+          preference: createPreference(),
         };
       }
 
@@ -170,7 +306,19 @@ export async function POST(request: Request) {
     });
 
     const instruction = getInstructionForPhase(session.phase);
-    const systemPrompt = buildChatSystemPrompt(session.memory, session.phase, instruction, session.plan);
+    const skillSelection = selectSkills(session.memory, session.phase, session.plan);
+    session.promptState = {
+      selectedSkills: skillSelection.selectedSkills,
+      reason: skillSelection.reason,
+      updatedAt: nowIso(),
+    };
+    const systemPrompt = buildChatSystemPrompt(
+      session.memory,
+      session.phase,
+      instruction,
+      session.plan,
+      session.promptState.selectedSkills,
+    );
 
     // Build multi-turn messages
     const aiMessages = buildConversationMessages(systemPrompt, session.messages);
@@ -191,10 +339,16 @@ export async function POST(request: Request) {
       });
     } catch (err) {
       const fallback = buildFallbackTurn(session.phase, isProfileReady(session.memory), !!session.plan);
+      const fallbackChoiceGroups = normalizeChoiceGroups(
+        undefined,
+        fallback.questions,
+        inferChoiceMode(fallback.reply, fallback.questions),
+      );
       const assistantMsg: ChatMessage = {
         role: "assistant",
         content: fallback.reply,
         questions: fallback.questions,
+        choiceGroups: fallbackChoiceGroups,
         timestamp: Date.now(),
       };
       session.messages.push(assistantMsg);
@@ -202,6 +356,9 @@ export async function POST(request: Request) {
       if (session.phase === "greeting") {
         session.phase = "profiling";
       }
+      updateSessionProgress(session, message);
+      updateSessionPreference(session, message);
+      persistSessionState(sessionId, session);
       const process = buildProcessSummary({
         phase: phaseAtStart,
         nextPhase: session.phase,
@@ -227,6 +384,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         reply: fallback.reply,
         questions: fallback.questions,
+        choiceGroups: fallbackChoiceGroups,
         process,
         profile: profileState,
         profileConfidence,
@@ -261,10 +419,12 @@ export async function POST(request: Request) {
 
     let reply: string;
     let questions: string[] = [];
+    let choiceGroups: ChoiceGroup[] = [];
     let profileState: UserProfileState | null = null;
     let profileConfidence: Record<string, number> | null = null;
     let planState: PlanState | null = null;
     let codeFilesCount = 0;
+    let imageArtifactsCount = 0;
     let checklistPassed = false;
 
     if (parsed) {
@@ -273,24 +433,32 @@ export async function POST(request: Request) {
               typeof parsed.summary === "string" ? parsed.summary : "";
 
       questions = normalizeQuestions(parsed.questions);
+      choiceGroups = normalizeChoiceGroups(
+        parsed.choiceGroups ?? parsed.choice_groups,
+        questions,
+        inferChoiceMode(reply, questions, parsed.choiceMode ?? parsed.choice_mode),
+      );
 
       // Try to extract plan from JSON response (handles any naming convention)
       const version = (session.plan?.version ?? 0) + 1;
       const extractedPlan = extractPlanFromParsed(parsed, version);
       const extractedCodeFiles = extractCodeFilesFromParsed(parsed, version);
+      const extractedImageArtifacts = extractImageArtifactsFromParsed(parsed, version);
       if (extractedPlan && extractedPlan.actionSteps.length > 0) {
         planState = extractedPlan;
         if (session.phase === "reviewing") {
           planState.modifiedReason = message;
         }
-        persistPlanArtifacts(sessionId, planState, extractedCodeFiles);
+        persistPlanArtifacts(sessionId, planState, extractedCodeFiles, extractedImageArtifacts);
         session.plan = planState;
         codeFilesCount = extractedCodeFiles.length;
+        imageArtifactsCount = extractedImageArtifacts.length;
         logChatEvent(sessionId, session.phase, "plan_persisted", {
           mode: "ai",
           version: planState.version,
           steps: planState.actionSteps.length,
           codeFiles: extractedCodeFiles.length,
+          images: extractedImageArtifacts.length,
         });
       }
 
@@ -332,11 +500,18 @@ export async function POST(request: Request) {
       }
 
       if (session.phase === "clarifying" && checklistPassed && !planState) {
+        const planningSkillSelection = selectSkills(session.memory, "planning", session.plan);
+        session.promptState = {
+          selectedSkills: planningSkillSelection.selectedSkills,
+          reason: planningSkillSelection.reason,
+          updatedAt: nowIso(),
+        };
         const planningSystemPrompt = buildChatSystemPrompt(
           session.memory,
           "planning",
           PLANNING_INSTRUCTION,
           session.plan,
+          session.promptState.selectedSkills,
         );
         const planningMessages = buildConversationMessages(planningSystemPrompt, session.messages);
         logChatEvent(sessionId, session.phase, "ai_request", {
@@ -356,30 +531,41 @@ export async function POST(request: Request) {
         const planningCodeFiles = planningParsed
           ? extractCodeFilesFromParsed(planningParsed, version)
           : [];
+        const planningImageArtifacts = planningParsed
+          ? extractImageArtifactsFromParsed(planningParsed, version)
+          : [];
         planState = planningParsed
           ? extractPlanFromParsed(planningParsed, version)
           : parsePlanFromMarkdown(aiResult.content, version);
 
         if (planState) {
-          persistPlanArtifacts(sessionId, planState, planningCodeFiles);
+          persistPlanArtifacts(sessionId, planState, planningCodeFiles, planningImageArtifacts);
           session.plan = planState;
           codeFilesCount = planningCodeFiles.length;
+          imageArtifactsCount = planningImageArtifacts.length;
           logChatEvent(sessionId, "planning", "plan_persisted", {
             mode: "ai",
             version: planState.version,
             steps: planState.actionSteps.length,
             codeFiles: planningCodeFiles.length,
+            images: planningImageArtifacts.length,
           });
           reply = typeof planningParsed?.reply === "string"
             ? planningParsed.reply
             : "Plan 已生成，可在右侧面板查看详情。";
           questions = [];
+          choiceGroups = [];
         }
       }
     } else {
       // AI didn't return valid JSON — fall back to text extraction
       reply = safeReplyFromUnparsedAiText(aiResult.content, session.phase);
       questions = normalizeQuestions(extractQuestionsFromText(aiResult.content));
+      choiceGroups = normalizeChoiceGroups(
+        undefined,
+        questions,
+        inferChoiceMode(reply, questions),
+      );
 
       // Try to parse plan from markdown during plan-producing phases
       if (session.phase === "planning" || session.phase === "clarifying" || session.phase === "reviewing") {
@@ -417,10 +603,11 @@ export async function POST(request: Request) {
 
     // If plan was generated (from JSON or markdown), force reply to be short
     if (planState) {
-      reply = codeFilesCount > 0
-        ? `✅ Plan 和 ${codeFilesCount} 个代码文件已生成，可在右侧面板查看详情。`
+      reply = codeFilesCount > 0 || imageArtifactsCount > 0
+        ? `✅ Plan 已生成，并同步产出 ${codeFilesCount} 个代码文件、${imageArtifactsCount} 个图片引用，可在右侧面板查看详情。`
         : "✅ Plan 已生成，可在右侧面板查看详情。你可以继续对话来调整计划。";
       questions = []; // No follow-up questions when showing plan
+      choiceGroups = [];
     }
 
     const nextPhase = getNextPhase({
@@ -443,6 +630,7 @@ export async function POST(request: Request) {
       role: "assistant",
       content: reply,
       questions: questions.length > 0 ? questions : undefined,
+      choiceGroups: choiceGroups.length > 0 ? choiceGroups : undefined,
       process,
       timestamp: Date.now(),
     };
@@ -457,11 +645,15 @@ export async function POST(request: Request) {
 
     // Phase transitions
     session.phase = nextPhase;
+    updateSessionProgress(session, message);
+    updateSessionPreference(session, message);
+    persistSessionState(sessionId, session);
 
     // Build response
     const response: {
       reply: string;
       questions?: string[];
+      choiceGroups?: ChoiceGroup[];
       process?: string;
       profile?: UserProfileState;
       profileConfidence?: Record<string, number>;
@@ -475,6 +667,9 @@ export async function POST(request: Request) {
 
     if (questions.length > 0) {
       response.questions = questions;
+    }
+    if (choiceGroups.length > 0) {
+      response.choiceGroups = choiceGroups;
     }
     if (profileState) {
       response.profile = profileState;

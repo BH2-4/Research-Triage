@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   extractCodeFilesFromParsed,
+  extractImageArtifactsFromParsed,
   extractPlanFromParsed,
+  inferChoiceMode,
+  normalizeChoiceGroups,
   normalizeQuestions,
   parseJsonFromText,
   persistPlanArtifacts,
@@ -65,6 +68,66 @@ describe("chat pipeline contracts", () => {
       "接下来你想要明确的问题：你对matlab/simulink的熟悉程度？",
       "接下来你想要明确的问题：你希望先看懂模型还是先跑通最小demo？",
     ]);
+  });
+
+  it("normalizes structured single and multiple choice groups", () => {
+    const groups = normalizeChoiceGroups([
+      {
+        id: "interests",
+        mode: "multiple",
+        prompt: "你想同时探索哪些方向",
+        options: [
+          { id: "ai", label: "AI 应用", value: "AI 应用" },
+          { label: "社会观察", value: "社会观察" },
+          "选项C",
+          "自然科学",
+        ],
+        confirmLabel: "确认这些方向",
+      },
+    ]);
+
+    expect(groups).toEqual([
+      expect.objectContaining({
+        id: "interests",
+        mode: "multiple",
+        prompt: "你想同时探索哪些方向",
+        confirmLabel: "确认这些方向",
+        options: expect.arrayContaining([
+          expect.objectContaining({ id: "ai", label: "AI 应用", value: "AI 应用" }),
+          expect.objectContaining({ label: "社会观察", value: "社会观察" }),
+          expect.objectContaining({ label: "自然科学", value: "自然科学" }),
+          expect.objectContaining({ id: "help-me-find-direction" }),
+        ]),
+      }),
+    ]);
+    expect(groups[0].options.some((option) => option.label === "选项C")).toBe(false);
+  });
+
+  it("builds a legacy single choice group from questions", () => {
+    const groups = normalizeChoiceGroups(undefined, ["先看懂课题", "先做 Demo"]);
+
+    expect(groups).toEqual([
+      expect.objectContaining({
+        mode: "single",
+        options: expect.arrayContaining([
+          expect.objectContaining({ value: "先看懂课题" }),
+          expect.objectContaining({ value: "先做 Demo" }),
+          expect.objectContaining({ value: "我不太理解这些，帮我找方向" }),
+        ]),
+      }),
+    ]);
+  });
+
+  it("infers multiple choice mode for legacy questions when wording requires multiple selections", () => {
+    const questions = ["AI 应用", "社会观察", "自然科学"];
+    const mode = inferChoiceMode("你可以同时选择多个兴趣方向，选完后再提交。", questions);
+    const groups = normalizeChoiceGroups(undefined, questions, mode);
+
+    expect(mode).toBe("multiple");
+    expect(groups[0]).toMatchObject({
+      mode: "multiple",
+      confirmLabel: "确认选择",
+    });
   });
 
   it("normalizes plan fields and object-form steps", () => {
@@ -155,6 +218,34 @@ describe("chat pipeline contracts", () => {
     ]);
   });
 
+  it("extracts image artifact metadata from planning protocol JSON", () => {
+    const images = extractImageArtifactsFromParsed({
+      images: [
+        {
+          title: "流程示意图",
+          url: "https://example.com/flow.png",
+          caption: "研究流程",
+          source: "example.com",
+        },
+        {
+          title: "Unsafe",
+          url: "javascript:alert(1)",
+        },
+      ],
+    }, 2);
+
+    expect(images).toEqual([
+      expect.objectContaining({
+        filename: "image-v2-image-1.json",
+        title: "流程示意图",
+        url: "https://example.com/flow.png",
+        caption: "研究流程",
+        source: "example.com",
+        version: 2,
+      }),
+    ]);
+  });
+
   it("persists code artifacts beside plan documents", () => {
     const sessionId = `pipeline-code-${Date.now()}`;
     const plan: PlanState = {
@@ -188,6 +279,44 @@ describe("chat pipeline contracts", () => {
           type: "code",
           version: 5,
           language: "matlab",
+        }),
+      ]),
+    );
+  });
+
+  it("persists image artifacts beside plan documents", () => {
+    const sessionId = `pipeline-image-${Date.now()}`;
+    const plan: PlanState = {
+      userProfile: "用户需要图示辅助理解",
+      problemJudgment: "需要外部示意图降低理解成本",
+      systemLogic: "图片作为引用产物保存，Plan 保留执行路径",
+      recommendedPath: "先看图示再执行步骤",
+      actionSteps: ["查看示意图", "记录理解"],
+      riskWarnings: ["确认图片来源可信"],
+      nextOptions: ["拆开讲"],
+      version: 6,
+      isCurrent: true,
+    };
+
+    persistPlanArtifacts(sessionId, plan, [], [
+      {
+        filename: "image-v6-reference.json",
+        title: "参考图",
+        url: "https://example.com/reference.png",
+        caption: "参考说明",
+        version: 6,
+      },
+    ]);
+
+    expect(readFile(sessionId, "image-v6-reference.json")).toContain("https://example.com/reference.png");
+    expect(getManifest(sessionId)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          filename: "image-v6-reference.json",
+          title: "参考图",
+          type: "image",
+          version: 6,
+          url: "https://example.com/reference.png",
         }),
       ]),
     );

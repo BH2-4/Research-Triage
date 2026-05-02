@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { marked } from "marked";
+import { MarkdownBlock } from "./markdown-block";
 import type { PlanState } from "../lib/triage-types";
 
 type Props = {
@@ -48,7 +48,7 @@ export function PlanPanel({ plan, onAction, disabled }: Props) {
         open={isOpen("profile")}
         onToggle={() => toggle("profile")}
       >
-        <div className="plan-md" dangerouslySetInnerHTML={{ __html: marked.parse(plan.userProfile) }} />
+        <MarkdownBlock className="plan-md" content={plan.userProfile} />
       </Section>
 
       {/* Problem Judgment */}
@@ -57,7 +57,7 @@ export function PlanPanel({ plan, onAction, disabled }: Props) {
         open={isOpen("problem")}
         onToggle={() => toggle("problem")}
       >
-        <div className="plan-md" dangerouslySetInnerHTML={{ __html: marked.parse(plan.problemJudgment) }} />
+        <MarkdownBlock className="plan-md" content={plan.problemJudgment} />
       </Section>
 
       {/* System Logic */}
@@ -66,7 +66,7 @@ export function PlanPanel({ plan, onAction, disabled }: Props) {
         open={isOpen("logic")}
         onToggle={() => toggle("logic")}
       >
-        <div className="plan-md muted" dangerouslySetInnerHTML={{ __html: marked.parse(plan.systemLogic) }} />
+        <MarkdownBlock className="plan-md muted" content={plan.systemLogic} />
       </Section>
 
       {/* Recommended Path */}
@@ -75,7 +75,7 @@ export function PlanPanel({ plan, onAction, disabled }: Props) {
         open={isOpen("path")}
         onToggle={() => toggle("path")}
       >
-        <div className="plan-md" dangerouslySetInnerHTML={{ __html: marked.parse(plan.recommendedPath) }} />
+        <MarkdownBlock className="plan-md" content={plan.recommendedPath} />
       </Section>
 
       {/* Action Steps */}

@@ -33,7 +33,11 @@ export async function GET(
     if (raw) {
       return new Response(content, {
         headers: {
-          "Content-Type": meta?.type === "code" ? "text/plain; charset=utf-8" : "text/markdown; charset=utf-8",
+          "Content-Type": meta?.type === "code"
+            ? "text/plain; charset=utf-8"
+            : meta?.type === "image"
+              ? "application/json; charset=utf-8"
+              : "text/markdown; charset=utf-8",
           "Content-Disposition": `inline; filename="${resolvedFilename}"`,
         },
       });

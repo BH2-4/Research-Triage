@@ -109,11 +109,29 @@ export type TriageResponse = {
 
 // ─── Chat & Session Types (MVP) ──────────────────────────────────
 
+export type ChoiceMode = "single" | "multiple";
+
+export type ChoiceOption = {
+  id: string;
+  label: string;
+  value: string;
+  selected?: boolean;
+};
+
+export type ChoiceGroup = {
+  id: string;
+  mode: ChoiceMode;
+  prompt?: string;
+  options: ChoiceOption[];
+  confirmLabel?: string;
+};
+
 /** Single chat message */
 export type ChatMessage = {
   role: "user" | "assistant" | "system";
   content: string;
   questions?: string[];
+  choiceGroups?: ChoiceGroup[];
   process?: string;              // 可展示的流程摘要，不承载模型内部推理文本
   timestamp: number;
 };
@@ -130,6 +148,38 @@ export type UserProfileState = {
   deviceAvailable: string;       // 可投入设备
   timeAvailable: string;         // 可投入时间
   explanationPreference: string; // 偏好解释风格
+};
+
+export type ProgressMemory = {
+  phase: Phase;
+  currentPlanVersion?: number;
+  lastUserMessage?: string;
+  lastChoiceSummary?: string;
+  updatedAt: string;
+};
+
+export type PreferenceMemory = {
+  explanationPreference?: string;
+  interactionPreference?: "button" | "free_text" | "multi_select";
+  outputDetail?: "simple" | "balanced" | "professional";
+  updatedAt: string;
+};
+
+export type PromptState = {
+  selectedSkills: string[];
+  reason: string;
+  updatedAt: string;
+};
+
+export type PersistedSessionState = {
+  profile?: UserProfileState;
+  profileConfidence?: Record<string, number>;
+  phase: Phase;
+  progress: ProgressMemory;
+  preference: PreferenceMemory;
+  promptState?: PromptState;
+  currentPlanVersion?: number;
+  updatedAt: string;
 };
 
 /** Plan state — displayed in PlanPanel (PRD §8.5 + §11.3) */
@@ -155,6 +205,16 @@ export type CodeFileArtifact = {
   version: number;
 };
 
+export type ImageArtifact = {
+  filename: string;
+  title: string;
+  url: string;
+  source?: string;
+  caption?: string;
+  alt?: string;
+  version: number;
+};
+
 /** File manifest entry for userspace/ */
 export type FileManifest = {
   filename: string;
@@ -163,6 +223,10 @@ export type FileManifest = {
   version: number;
   createdAt: string;
   language?: string;
+  url?: string;
+  source?: string;
+  caption?: string;
+  alt?: string;
 };
 
 /** Chat session phases */

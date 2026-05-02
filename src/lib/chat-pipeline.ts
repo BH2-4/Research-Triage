@@ -1,6 +1,6 @@
 import { getDetectedFields, getReliableFields, isProfileReady, type UserProfileMemory } from "./memory";
-import { readFile, saveCodeFile, saveMarkdownDocument, savePlan } from "./userspace";
-import type { ChatMessage, CodeFileArtifact, FileManifest, Phase, PlanState } from "./triage-types";
+import { readFile, saveCodeFile, saveImageArtifact, saveMarkdownDocument, savePlan } from "./userspace";
+import type { ChatMessage, ChoiceGroup, ChoiceMode, CodeFileArtifact, FileManifest, ImageArtifact, Phase, PlanState } from "./triage-types";
 import type { ChatMsg } from "./ai-provider";
 
 export function parseJsonFromText(text: string): Record<string, unknown> | null {
@@ -44,7 +44,9 @@ function isProtocolJson(value: unknown): value is Record<string, unknown> {
     || "profileUpdates" in obj
     || "checklistPassed" in obj
     || "plan" in obj
-    || "codeFiles" in obj;
+    || "codeFiles" in obj
+    || "imageArtifacts" in obj
+    || "images" in obj;
 }
 
 function extractBalancedJsonCandidates(text: string): string[] {
@@ -159,6 +161,143 @@ export function normalizeQuestions(raw: unknown): string[] {
       return !arr.some((candidate) => candidate !== item && candidate.startsWith(item.replace(/[？?]$/, "")));
     })
     .slice(0, 6);
+}
+
+function isValidChoiceText(value: string): boolean {
+  const text = value.trim();
+  if (text.length < 2) return false;
+  if (/^选项\s*[a-dA-D]$/.test(text)) return false;
+  if (/^[a-dA-D][).、]?\s*$/.test(text)) return false;
+  if (text === "其他" || text === "其它" || text === "请选择") return false;
+  return true;
+}
+
+function choiceIdFromText(text: string, index: number): string {
+  const id = text
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9\u4e00-\u9fa5_.-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[.-]+|[.-]+$/g, "")
+    .slice(0, 40);
+  return id || `option-${index + 1}`;
+}
+
+function normalizeChoiceMode(value: unknown): ChoiceMode {
+  return value === "multiple" ? "multiple" : "single";
+}
+
+export function inferChoiceMode(reply: string, questions: string[], explicitMode?: unknown): ChoiceMode {
+  if (explicitMode === "multiple" || explicitMode === "single") return explicitMode;
+
+  const text = `${reply}\n${questions.join("\n")}`;
+  if (
+    /多选|可多选|可以多选|允许多选|同时选择|选择多个|选多个|多个方向|多个兴趣|多个工具|多个困难|多个卡点|多个偏好|哪些方向|哪些兴趣|哪些工具|哪些困难|哪些卡点|哪些偏好/.test(text)
+  ) {
+    return "multiple";
+  }
+
+  return "single";
+}
+
+function normalizeChoiceOptions(raw: unknown): ChoiceGroup["options"] {
+  if (!Array.isArray(raw)) return [];
+
+  const options: ChoiceGroup["options"] = [];
+  for (const [index, item] of raw.entries()) {
+    const obj = item && typeof item === "object" && !Array.isArray(item)
+      ? item as Record<string, unknown>
+      : null;
+    const label = typeof item === "string"
+      ? item
+      : typeof obj?.label === "string"
+        ? obj.label
+        : typeof obj?.text === "string"
+          ? obj.text
+          : "";
+    const value = typeof obj?.value === "string" ? obj.value : label;
+    if (!isValidChoiceText(label) || !isValidChoiceText(value)) continue;
+
+    const rawId = typeof obj?.id === "string" ? obj.id : "";
+    const id = rawId && /^[a-zA-Z0-9_.-]+$/.test(rawId)
+      ? rawId
+      : choiceIdFromText(value, index);
+
+    if (options.some((option) => option.id === id || option.value === value)) continue;
+
+    options.push({
+      id,
+      label: label.trim(),
+      value: value.trim(),
+      selected: obj?.selected === true,
+    });
+  }
+
+  return options.slice(0, 8);
+}
+
+function ensureEscapeChoice(options: ChoiceGroup["options"]): ChoiceGroup["options"] {
+  const escapeText = "我不太理解这些，帮我找方向";
+  const hasEscape = options.some((option) =>
+    option.value.includes("帮我找方向") ||
+    option.value.includes("自己描述") ||
+    option.value.includes("自定义"),
+  );
+  return hasEscape
+    ? options
+    : [
+        ...options,
+        {
+          id: "help-me-find-direction",
+          label: escapeText,
+          value: escapeText,
+        },
+      ];
+}
+
+export function normalizeChoiceGroups(
+  raw: unknown,
+  fallbackQuestions: string[] = [],
+  fallbackMode: ChoiceMode = "single",
+): ChoiceGroup[] {
+  const source = Array.isArray(raw) && raw.length > 0
+    ? raw
+    : fallbackQuestions.length > 0
+      ? [{
+          id: "next-step",
+          mode: fallbackMode,
+          options: fallbackQuestions,
+        }]
+      : [];
+
+  const groups: ChoiceGroup[] = [];
+  for (const [index, item] of source.entries()) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const obj = item as Record<string, unknown>;
+    const options = ensureEscapeChoice(normalizeChoiceOptions(obj.options));
+    if (options.length === 0) continue;
+    const mode = inferChoiceMode(
+      typeof obj.prompt === "string" ? obj.prompt : "",
+      options.map((option) => option.value),
+      obj.mode,
+    );
+
+    const rawId = typeof obj.id === "string" ? obj.id : "";
+    const id = rawId && /^[a-zA-Z0-9_.-]+$/.test(rawId) ? rawId : `choice-group-${index + 1}`;
+    const prompt = typeof obj.prompt === "string" && obj.prompt.trim()
+      ? obj.prompt.trim()
+      : undefined;
+    const confirmLabel = typeof obj.confirmLabel === "string" && obj.confirmLabel.trim()
+      ? obj.confirmLabel.trim()
+      : mode === "multiple"
+        ? "确认选择"
+        : undefined;
+
+    groups.push({ id, mode, prompt, options, confirmLabel });
+  }
+
+  return groups.slice(0, 3);
 }
 
 export function extractReplyFromText(text: string): string {
@@ -347,6 +486,27 @@ function sanitizeCodeFilename(filename: string, language: string, version: numbe
   return `code-v${version}-${withExt}`;
 }
 
+function slugFromText(text: string, fallback: string): string {
+  const slug = text
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9_.-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[.-]+|[.-]+$/g, "")
+    .slice(0, 42);
+  return slug || fallback;
+}
+
+function isSafeExternalUrl(value: string): boolean {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export function extractCodeFilesFromParsed(parsed: Record<string, unknown>, currentVersion: number): CodeFileArtifact[] {
   const root = (parsed.plan && typeof parsed.plan === "object")
     ? parsed.plan as Record<string, unknown>
@@ -391,6 +551,49 @@ export function extractCodeFilesFromParsed(parsed: Record<string, unknown>, curr
       title,
       language,
       content,
+      version: currentVersion,
+    }];
+  });
+}
+
+export function extractImageArtifactsFromParsed(parsed: Record<string, unknown>, currentVersion: number): ImageArtifact[] {
+  const root = (parsed.plan && typeof parsed.plan === "object")
+    ? parsed.plan as Record<string, unknown>
+    : parsed;
+  const raw = Array.isArray(parsed.imageArtifacts)
+    ? parsed.imageArtifacts
+    : Array.isArray(parsed.images)
+      ? parsed.images
+      : Array.isArray(root.imageArtifacts)
+        ? root.imageArtifacts
+        : Array.isArray(root.images)
+          ? root.images
+          : [];
+
+  return raw.flatMap((item, index) => {
+    if (!item || typeof item !== "object") return [];
+    const obj = item as Record<string, unknown>;
+    const url = typeof obj.url === "string"
+      ? obj.url
+      : typeof obj.href === "string"
+        ? obj.href
+        : typeof obj.src === "string"
+          ? obj.src
+          : "";
+    if (!isSafeExternalUrl(url)) return [];
+
+    const title = typeof obj.title === "string" && obj.title.trim()
+      ? obj.title.trim()
+      : `参考图片 v${currentVersion}-${index + 1}`;
+    const filename = `image-v${currentVersion}-${slugFromText(title, `image-${index + 1}`)}.json`;
+
+    return [{
+      filename,
+      title,
+      url: url.trim(),
+      source: typeof obj.source === "string" ? obj.source.trim() : undefined,
+      caption: typeof obj.caption === "string" ? obj.caption.trim() : undefined,
+      alt: typeof obj.alt === "string" ? obj.alt.trim() : title,
       version: currentVersion,
     }];
   });
@@ -473,6 +676,7 @@ export function persistPlanArtifacts(
   sessionId: string,
   plan: PlanState,
   codeFiles: CodeFileArtifact[] = [],
+  imageArtifacts: ImageArtifact[] = [],
 ): void {
   savePlan(sessionId, plan.version, planToMarkdown(plan), plan.modifiedReason);
   saveMarkdownDocument(sessionId, "summary.md", "当前科研探索摘要", "summary", buildSummaryDocument(plan), plan.version);
@@ -480,6 +684,9 @@ export function persistPlanArtifacts(
   saveMarkdownDocument(sessionId, "research-path.md", "科研路径说明", "path", buildResearchPathDocument(plan), plan.version);
   for (const file of codeFiles) {
     saveCodeFile(sessionId, file.filename, file.title, file.language, file.content, file.version);
+  }
+  for (const image of imageArtifacts) {
+    saveImageArtifact(sessionId, image);
   }
 }
 

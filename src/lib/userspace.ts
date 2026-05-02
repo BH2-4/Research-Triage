@@ -1,7 +1,7 @@
 import { execFileSync, spawn } from "child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import path from "path";
-import type { FileManifest } from "./triage-types";
+import type { FileManifest, ImageArtifact, PersistedSessionState } from "./triage-types";
 
 const BASE = path.join(process.cwd(), "userspace");
 
@@ -221,4 +221,46 @@ export function saveCodeFile(
     createdAt: new Date().toISOString(),
     language,
   });
+}
+
+export function saveImageArtifact(
+  sessionId: string,
+  artifact: ImageArtifact,
+): void {
+  writeFile(sessionId, artifact.filename, JSON.stringify({
+    title: artifact.title,
+    url: artifact.url,
+    source: artifact.source,
+    caption: artifact.caption,
+    alt: artifact.alt,
+    version: artifact.version,
+  }, null, 2));
+  upsertManifest(sessionId, {
+    filename: artifact.filename,
+    title: artifact.title,
+    type: "image",
+    version: artifact.version,
+    createdAt: new Date().toISOString(),
+    url: artifact.url,
+    source: artifact.source,
+    caption: artifact.caption,
+    alt: artifact.alt,
+  });
+}
+
+export function saveSessionState(
+  sessionId: string,
+  state: PersistedSessionState,
+): void {
+  writeFile(sessionId, "state.json", JSON.stringify(state, null, 2));
+}
+
+export function readSessionState(sessionId: string): PersistedSessionState | null {
+  const raw = readFile(sessionId, "state.json");
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as PersistedSessionState;
+  } catch {
+    return null;
+  }
 }

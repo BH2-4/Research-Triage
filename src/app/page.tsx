@@ -104,6 +104,7 @@ export default function ChatPage() {
           role: "assistant",
           content: data.reply,
           questions: data.questions,
+          choiceGroups: data.choiceGroups,
           process: data.process,
           timestamp: Date.now(),
         };

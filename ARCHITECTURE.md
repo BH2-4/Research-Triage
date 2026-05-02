@@ -248,7 +248,155 @@ src/lib/triage.test.ts
 - 增加更强的人工审核记录和 Plan 质量评分。
 - 增加图片/图示产物，但不得破坏当前 `/api/chat + userspace + 单页工作台` 主链路。
 
-## 10. 当前边界
+## 10. PRD V1.1 §8 模块实现度检查
+
+本节对照 `人人都能做科研_mvp_prd_审查版 V1.1.md` 的第 8 节功能需求。当前判断：P0 主链路已经完成，P1 需要在现有预留扩展点上继续演进，不重建架构。
+
+### 10.1 P0 模块实现程度
+
+| PRD 模块 | 优先级 | 当前实现 | 实现程度 | 说明 |
+|---|---|---|---|---|
+| 8.2 对话入口 | P0 | `src/app/page.tsx`, `ChatPanel`, `ChatInput` | 已完成 | 用户进入 `/` 后直接进入单页工作台，支持自然语言输入，不再使用旧表单流程。 |
+| 8.3 用户画像识别 | P0 | `memory.ts`, `/api/chat`, `side-panel.tsx` | 已完成，可增强 | 10 字段画像、置信度、画像就绪规则、前端画像展示均已存在；用户纠正目前通过自然语言回写，没有独立修正入口。 |
+| 8.4 多轮博弈引导 | P0 | 阶段机、`questions`, `ChoiceButtons`, `InlineInput` | P0 已完成，V1.1 多选待做 | 已支持主动追问、选项按钮、自由输入、Plan 调整；多选按钮属于 V1.1 P1 增量。 |
+| 8.5 Plan 生成与展示 | P0 | `PlanState`, `PlanPanel`, `chat-pipeline.ts` | 已完成 | Plan 有独立区域、折叠分区、步骤级调整按钮、版本号和 userspace 持久化。 |
+| 8.6 文档预览面板 | P0 | `FileList`, `DocPanel`, `/api/userspace` | 已完成，可增强 | Markdown 文档、代码文件、摘要、清单、科研路径可预览；修改项/删减项目前主要依赖 Plan 历史，不是专门 diff 视图。 |
+| 8.1 多端适配 | P0 | `globals.css` 响应式布局 | 基础完成 | 工作台在桌面/移动端可用，后续 P1 交互增强需要继续做移动端状态验证。 |
+
+### 10.2 P1 模块实现基础
+
+| PRD 模块 | 当前状态 | 已有预留 | Phase 5 落地 |
+|---|---|---|---|
+| 多级选择 / 拆分选项 | 已完成 | `normalizeQuestions`, `splitInlineSubOptions`, `ChoiceButtons`, `InlineInput` | 新增 `ChoiceGroup` 协议、单选/多选组件、已选状态、确认选择和旧 `questions` 兼容。 |
+| 图片 / 文档展示 | 已完成 | `marked` 富文本渲染、`FileManifest.type = "image"`、`DocPanel` | 新增统一 Markdown 渲染、图片样式、失败兜底、外部图片元数据和 userspace 图片 manifest。 |
+| Memory 机制 | 已完成 | `UserProfileMemory`, `profile.md`, session store, userspace 恢复 | 新增 `state.json`、`progress/preference/promptState`、服务恢复和显式画像修正入口。 |
+| Skill / Prompt 动态引导 | 已完成 | `skills/*.md`, `skills.ts`, `chat-prompts.ts`, 阶段 instruction | 新增 `selectSkills()`，按画像/阶段裁剪 skill 注入，并持久化 prompt state。 |
+| Multi-Agent 工作流 | 未开始 | 当前单 Agent 编排层可继续承载模拟角色 | 保持 P2，不在 P1 引入真实多 Agent/MCP。 |
+
+## 11. P1 扩展架构
+
+P1 的架构原则是保持主链路不变：
+
+```text
+单页工作台
+  -> /api/chat
+  -> Memory / Prompt / Pipeline
+  -> userspace 文件沉淀
+  -> 右侧 Plan / Doc / History 预览
+```
+
+不得恢复旧 `/api/triage` 表单式管线，不新增第二套对话 API，不绕过 userspace 做产物沉淀。P1 只利用 Phase 1-4 留下的冗余点做增量扩展。
+
+### 11.1 交互协议扩展
+
+当前响应协议：
+
+```ts
+{
+  reply: string;
+  questions?: string[];
+  profile?: UserProfileState;
+  profileConfidence?: Record<string, number>;
+  phase: Phase;
+  plan?: PlanState;
+}
+```
+
+P1 可向后兼容增加结构化选择协议：
+
+```ts
+type ChoiceMode = "single" | "multiple";
+
+type ChoiceGroup = {
+  id: string;
+  mode: ChoiceMode;
+  prompt?: string;
+  options: Array<{
+    id: string;
+    label: string;
+    value: string;
+    selected?: boolean;
+  }>;
+  confirmLabel?: string;
+};
+```
+
+兼容规则：
+
+- `questions: string[]` 继续保留，作为旧模型输出和 fallback 的单选渲染路径。
+- `/api/chat` 负责把 AI 输出中的 `choiceGroups` 归一化；如果没有 `choiceGroups`，继续按 `questions` 渲染。
+- 前端在 `ChoiceButtons` 内部升级为单选/多选组件，不改变 `ChatPanel` 和 `/api/chat` 的基本调用方向。
+- 多选确认后发送一条自然语言摘要，例如：`我选择了：A、B、C`，继续复用现有 `sendMessage`。
+
+### 11.2 图片与文档扩展
+
+当前 userspace 已允许 manifest 类型包含 `image`，但缺少完整图片产物协议。P1 应沿着 userspace 增加图片元数据，而不是引入独立媒体系统。
+
+建议新增：
+
+```ts
+type ImageArtifact = {
+  filename?: string;
+  url?: string;
+  title: string;
+  source?: string;
+  caption?: string;
+  alt?: string;
+  version: number;
+};
+```
+
+实现边界：
+
+- Markdown 中的 `![]()` 必须在 `DocPanel` 和聊天气泡中正常渲染，图片宽度受容器约束。
+- 外部图片优先保存为元数据引用，不默认下载远程资源。
+- 如果后续支持上传图片，仍写入 `userspace/{sessionId}/` 并记录 manifest，不新增独立上传业务管线。
+- 对外部 HTML/图片内容必须补安全策略，避免把不可信 HTML 直接暴露给用户。
+
+### 11.3 Memory 扩展
+
+现有 `UserProfileMemory` 只覆盖画像字段。P1 可以在同一 session state 中增加：
+
+```text
+progress.memory      当前阶段、最近确认项、当前 Plan 版本
+preference.memory    解释偏好、按钮偏好、输出长短偏好
+prompt.state         当前启用的 skill/prompt 策略
+```
+
+持久化策略：
+
+- MVP 阶段继续使用内存 Map + userspace 文件。
+- `profile.md` 保持给用户可读。
+- 新增机器可读 JSON 时优先放在 `userspace/{sessionId}/state.json` 或拆分为 `progress.json`、`preference.json`。
+- 关键记忆修改需要通过对话确认，不由模型静默覆盖。
+
+### 11.4 Skill / Prompt 动态引导
+
+当前 `skills/*.md` 已全部加载进 system prompt，阶段 instruction 已拆到 `chat-prompts.ts`。P1 可增加 skill selector：
+
+```text
+UserProfileMemory + Phase + PlanState
+  -> selectSkills()
+  -> buildChatSystemPrompt()
+```
+
+选择策略：
+
+- 入门用户优先注入沟通协议、问题拆解、模糊点暴露。
+- 有基础用户增加假设验证、证据评价、同行评审模拟。
+- 时间紧张用户强化最小可交付路径和风险压缩。
+
+该能力仍是单 Agent + Prompt 策略，不升级为真实 Multi-Agent。
+
+### 11.5 P1 风险控制
+
+- 协议扩展必须向后兼容旧 `questions`。
+- 所有新产物仍进入 userspace manifest。
+- 图片能力先做预览和元数据，不做图片编辑、标注或复杂视觉理解。
+- Memory 扩展先做可观察、可恢复，再做长期多设备同步。
+- 每个 P1 增量必须补契约测试，重点覆盖协议归一化、路径校验、Markdown 图片渲染和多选交互状态。
+
+## 12. 当前边界
 
 MVP 当前不做：
 

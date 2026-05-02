@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { marked } from "marked";
 import { ChoiceButtons } from "./choice-buttons";
+import { MarkdownBlock } from "./markdown-block";
 import { ProcessPanel } from "./process-panel";
 import type { ChatMessage } from "../lib/triage-types";
 
@@ -68,14 +68,12 @@ export function ChatPanel({ messages, onSelect, loading }: Props) {
               {m.role === "assistant" && m.process && (
                 <ProcessPanel process={m.process} />
               )}
-              <div
-                className="chat-bubble-text"
-                dangerouslySetInnerHTML={{ __html: marked.parse(m.content) }}
-              />
-              {m.role === "assistant" && m.questions && m.questions.length > 0 && (
+              <MarkdownBlock className="chat-bubble-text" content={m.content} />
+              {m.role === "assistant" && ((m.choiceGroups && m.choiceGroups.length > 0) || (m.questions && m.questions.length > 0)) && (
                 <>
                   <ChoiceButtons
-                    questions={m.questions}
+                    questions={m.questions ?? []}
+                    choiceGroups={m.choiceGroups}
                     onSelect={onSelect}
                     disabled={loading}
                   />

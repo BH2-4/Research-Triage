@@ -85,6 +85,14 @@ export function SidePanel({
             <span className="legend-item"><span className="conf-deduced">◉</span> 推断中</span>
             <span className="legend-item"><span className="conf-inferred">○</span> 猜测中</span>
           </div>
+          <button
+            className="profile-edit-button"
+            type="button"
+            disabled={disabled || !onPlanAction}
+            onClick={() => onPlanAction?.("我想修改我的用户画像，请先列出需要我确认的画像字段，不要直接覆盖已有记忆。")}
+          >
+            修改画像
+          </button>
         </div>
       ) : (
         <div className="panel">
