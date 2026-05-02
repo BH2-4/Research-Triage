@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "科研课题分诊台",
-  description: "面向学生科研项目的 AI 分诊入口，先判断状态，再给最小可行路径。",
+  title: "人人都能做科研",
+  description: "面向所有人的 AI 科研启蒙与路径引导平台。先了解你是谁，再帮你找到最适合的探索路径。",
 };
 
 export default function RootLayout({

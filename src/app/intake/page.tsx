@@ -1,5 +1,5 @@
-import { IntakeForm } from "../../components/intake-form";
+import { redirect } from "next/navigation";
 
 export default function IntakePage() {
-  return <IntakeForm />;
+  redirect("/");
 }

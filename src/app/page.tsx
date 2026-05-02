@@ -1,49 +1,218 @@
-import Link from "next/link";
+"use client";
 
-export default function HomePage() {
+import { useCallback, useEffect, useState } from "react";
+import { ChatInput } from "../components/chat-input";
+import { ChatPanel } from "../components/chat-panel";
+import { SidePanel } from "../components/side-panel";
+import type { ChatMessage, PlanState, UserProfileState } from "../lib/triage-types";
+
+const SESSION_KEY = "triage:chat-session";
+const SESSION_ID_KEY = "triage:session-id";
+
+type SavedSession = {
+  messages: ChatMessage[];
+  profile: UserProfileState | null;
+  profileConfidence: Record<string, number>;
+  plan: PlanState | null;
+  sessionId: string;
+};
+
+function getSessionId(): string {
+  if (typeof window === "undefined") return crypto.randomUUID();
+  const saved = sessionStorage.getItem(SESSION_ID_KEY);
+  if (saved) return saved;
+  const id = crypto.randomUUID();
+  sessionStorage.setItem(SESSION_ID_KEY, id);
+  return id;
+}
+
+export default function ChatPage() {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [profile, setProfile] = useState<UserProfileState | null>(null);
+  const [profileConfidence, setProfileConfidence] = useState<Record<string, number>>({});
+  const [plan, setPlan] = useState<PlanState | null>(null);
+  const [sessionId, setSessionId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [fileRefresh, setFileRefresh] = useState(0);
+  const [history, setHistory] = useState<
+    { messages: ChatMessage[]; profile: UserProfileState | null; profileConfidence: Record<string, number>; plan: PlanState | null }[]
+  >([]);
+
+  // Hydration guard: only restore from sessionStorage on client
+  useEffect(() => {
+    const id = getSessionId();
+    setSessionId(id);
+
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (raw) {
+      try {
+        const saved = JSON.parse(raw) as SavedSession;
+        if (saved.sessionId === id) {
+          setMessages(saved.messages);
+          setProfile(saved.profile);
+          setProfileConfidence(saved.profileConfidence ?? {});
+          setPlan(saved.plan ?? null);
+        }
+      } catch { /* ignore */ }
+    }
+  }, []);
+
+  // Save session after every change
+  useEffect(() => {
+    if (!sessionId) return;
+    sessionStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({ messages, profile, profileConfidence, plan, sessionId }),
+    );
+  }, [messages, profile, profileConfidence, plan, sessionId]);
+
+  const sendMessage = useCallback(
+    async (text: string) => {
+      if (!sessionId || loading) return;
+
+      // Save snapshot before this turn
+      setHistory((prev) => [...prev, { messages: [...messages], profile, profileConfidence, plan }]);
+
+      const userMsg: ChatMessage = {
+        role: "user",
+        content: text,
+        timestamp: Date.now(),
+      };
+      setMessages((prev) => [...prev, userMsg]);
+      setLoading(true);
+
+      try {
+        const resp = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text, sessionId }),
+        });
+
+        const data = await resp.json();
+
+        if (!resp.ok) {
+          const errMsg: ChatMessage = {
+            role: "assistant",
+            content: `出错了：${data.error ?? "未知错误"}`,
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, errMsg]);
+          return;
+        }
+
+        const assistantMsg: ChatMessage = {
+          role: "assistant",
+          content: data.reply,
+          questions: data.questions,
+          process: data.process,
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, assistantMsg]);
+
+        let shouldRefreshFiles = false;
+
+        if (data.profile) {
+          setProfile(data.profile);
+          shouldRefreshFiles = true;
+        }
+        if (data.profileConfidence) {
+          setProfileConfidence(data.profileConfidence);
+        }
+        if (data.plan) {
+          setPlan(data.plan);
+          shouldRefreshFiles = true;
+        }
+        if (shouldRefreshFiles) {
+          setFileRefresh((n) => n + 1);
+        }
+      } catch (err) {
+        const errMsg: ChatMessage = {
+          role: "assistant",
+          content: `网络异常：${err instanceof Error ? err.message : "请检查连接"}`,
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, errMsg]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [sessionId, loading, messages, profile, profileConfidence, plan],
+  );
+
+  const handleSelect = useCallback(
+    (text: string) => {
+      sendMessage(text);
+    },
+    [sendMessage],
+  );
+
+  const handleReset = useCallback(() => {
+    sessionStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SESSION_ID_KEY);
+    setMessages([]);
+    setProfile(null);
+    setProfileConfidence({});
+    setPlan(null);
+    setHistory([]);
+    setSessionId("");
+    setTimeout(() => {
+      const id = crypto.randomUUID();
+      sessionStorage.setItem(SESSION_ID_KEY, id);
+      setSessionId(id);
+    }, 0);
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    setHistory((prev) => {
+      if (prev.length === 0) return prev;
+      const restored = prev[prev.length - 1];
+      setMessages(restored.messages);
+      setProfile(restored.profile);
+      setProfileConfidence(restored.profileConfidence ?? {});
+      setPlan(restored.plan);
+      return prev.slice(0, -1);
+    });
+  }, []);
+
   return (
-    <section className="hero-layout">
-      <div className="panel hero-card">
-        <span className="eyebrow">科研课题分诊台</span>
-        <h1>拿到课题后，不知道该先问什么？</h1>
-        <p className="hero-copy">
-          先别急着选模型、查论文或堆资料。系统会先判断你是谁、你卡在哪、你最适合走哪条路径，再给出第一步和推荐服务入口。
-        </p>
-
-        <div className="pill-row">
-          <span className="pill">中文学生用户</span>
-          <span className="pill">文本优先</span>
-          <span className="pill">先分诊再回答</span>
+    <div className="chat-layout">
+      <div className="chat-main">
+        <div className="chat-header">
+          <span className="chat-title">人人都能做科研</span>
+          <div className="chat-header-actions">
+            <button
+              className="button-undo"
+              type="button"
+              onClick={handleUndo}
+              disabled={loading || history.length === 0}
+              suppressHydrationWarning
+              title="撤销上一轮对话"
+            >
+              撤销
+            </button>
+            <button
+              className="button-reset"
+              type="button"
+              onClick={handleReset}
+              disabled={loading}
+              title="开始新话题"
+            >
+              新对话
+            </button>
+          </div>
         </div>
-
-        <div className="actions">
-          <Link className="button button-primary" href="/intake">
-            立即诊断课题
-          </Link>
-          <Link className="button button-secondary" href="/intake">
-            我不知道怎么描述，让 AI 引导我
-          </Link>
-        </div>
+        <ChatPanel messages={messages} onSelect={handleSelect} loading={loading} />
+        <ChatInput onSend={sendMessage} disabled={loading} />
       </div>
-
-      <div className="hero-side">
-        <article className="panel insight-card">
-          <span className="eyebrow">你会看到什么</span>
-          <ul className="bullet-list">
-            <li>用户类型、当前阶段和主要卡点</li>
-            <li>课题人话解释和难度等级</li>
-            <li>3 条失败风险和 3-4 步最低可行路径</li>
-            <li>只推荐一个最合适的服务层级</li>
-          </ul>
-        </article>
-
-        <article className="panel insight-card">
-          <span className="eyebrow">边界</span>
-          <p>
-            这不是代写工具，也不帮助伪造实验或数据。它只做理解课题、压缩目标、规划真实交付和整理汇报口径。
-          </p>
-        </article>
-      </div>
-    </section>
+      <SidePanel
+        profile={profile}
+        profileConfidence={profileConfidence}
+        plan={plan}
+        sessionId={sessionId}
+        fileRefresh={fileRefresh}
+        onPlanAction={handleSelect}
+        disabled={loading}
+      />
+    </div>
   );
 }

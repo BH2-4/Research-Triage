@@ -1,186 +1,184 @@
-# Research-Triage（科研课题分诊台）
+# Research-Triage（人人都能做科研）
 
-> AI for Science：让每个人都知道如何开始科研。  
-> 当前阶段定位：**工程开发优先**，用于帮助开发者快速理解、运行、调试与扩展系统。
+> AI for Science：让普通用户通过对话进入科研思维，并获得可执行的探索 Plan。
 
-## 1. 项目目标
+当前阶段：Phase 1-3 已整合为单页工作台，主链路以 `/api/chat` 为唯一对话入口。
 
-Research-Triage 是一个基于 Next.js 的科研问题分诊系统，核心能力包括：
+## 项目目标
 
-- 将用户的科研想法进行结构化拆解与分流。
-- 生成“继续追问 / 推荐服务 / 直接回答 / 规划路径”等结果。
-- 提供多段式 Prompt 工作流（输入标准化、分类、路由、质量检查等）。
+Research-Triage 是一个科研问题分诊与路径引导系统。它不做通用聊天，也不直接替用户完成论文或实验，而是通过多轮对话完成：
 
-简言之：这是一个“科研任务入口层 + AI 编排层 + 结果展示层”的应用。
+- 识别用户画像和约束条件。
+- 暴露模糊点并强制用户确认关键假设。
+- 生成科研探索 Plan。
+- 支持用户挑战 Plan 并生成新版本。
+- 将画像和 Plan 沉淀到 `userspace/{sessionId}/` 中，供右侧文档面板预览。
 
----
+核心闭环：
 
-## 2. 技术栈
+```text
+模糊想法 -> 画像识别 -> 问题收敛 -> Plan 生成 -> Plan 调整 -> 文档沉淀
+```
 
-- **框架**：Next.js（App Router）
-- **语言**：TypeScript
-- **前端**：React 组件（`src/components`）
-- **后端接口**：Next.js Route Handlers（`src/app/api/**/route.ts`）
-- **AI 编排**：`src/lib` 内封装 provider 与 triage 流程
-- **Prompt 模板**：`prompt_templates/*.md`
+## 技术栈
 
----
+- 框架：Next.js 16 App Router
+- 语言：TypeScript
+- 前端：React 19
+- AI 调用：OpenAI-compatible `/chat/completions` 裸 `fetch`
+- Markdown 渲染：`marked`
+- 校验：Zod
+- 测试：Vitest
 
-## 3. 目录结构（开发重点）
+## 当前架构
 
 ```text
 src/
   app/
+    page.tsx                         # 唯一主工作台
+    layout.tsx
+    globals.css
+    intake/page.tsx                  # 兼容跳转到 /
+    result/page.tsx                  # 兼容跳转到 /
+    route-plan/page.tsx              # 兼容跳转到 /
     api/
-      triage/
-        route.ts                # 主分诊入口
-        intake/route.ts         # intake 子流程
-        route-plan/route.ts     # 路径规划子流程
-      generate-answer/route.ts  # 答案生成
-      recommend-service/route.ts# 服务推荐
-    intake/page.tsx             # 需求录入页
-    result/page.tsx             # 结果页
-    route-plan/page.tsx         # 路径规划页
-    page.tsx                    # 首页
+      chat/route.ts                  # 主对话、画像、收敛、Plan、Review
+      userspace/[sessionId]/route.ts # 文件清单
+      userspace/[sessionId]/[filename]/route.ts # 文档预览
 
   components/
-    intake-form.tsx
-    result-view.tsx
-    plan-card.tsx
-    route-plan-view.tsx
+    chat-panel.tsx
+    chat-input.tsx
+    choice-buttons.tsx
+    side-panel.tsx
+    plan-panel.tsx
+    file-list.tsx
+    doc-panel.tsx
 
   lib/
-    ai-provider.ts              # LLM provider 适配
-    ai-triage.ts                # AI 分诊编排
-    triage.ts                   # 业务分诊逻辑
-    route-plan.ts               # 路径规划逻辑
-    triage-types.ts             # 类型定义
-    storage.ts                  # 存储/会话辅助
-
-prompt_templates/
-  *.md                          # 分阶段 Prompt 模板
+    ai-provider.ts                   # OpenAI-compatible provider
+    memory.ts                        # 用户画像记忆和置信度
+    skills.ts                        # skills/*.md 加载与注入
+    userspace.ts                     # 会话文件存储
+    triage.ts                        # 规则 fallback 基础模块
+    triage-types.ts                  # 共享类型
 ```
 
----
+旧的 `/api/triage`、`/api/generate-answer`、`/api/recommend-service` 表单式流程已清理。Phase 4 应继续扩展 `/api/chat`，不要恢复旧流程。
 
-## 4. 本地开发
-
-### 4.1 环境要求
-
-- Node.js 18+
-- npm 9+
-
-### 4.2 安装依赖
+## 运行
 
 ```bash
 npm install
-```
-
-### 4.3 启动开发服务器
-
-```bash
 npm run dev
 ```
 
 默认访问：<http://localhost:3000>
 
-### 4.4 生产构建与运行
+如果端口被占用：
 
 ```bash
-npm run build
-npm run start
+npm run dev -- -p 3010
 ```
 
----
+## 环境变量
 
-## 5. 环境变量（建议）
+AI Provider 读取以下变量，优先级从上到下：
 
-请在项目根目录创建 `.env.local`，至少配置 AI Provider 所需密钥。由于当前 Provider 可能演进，请以 `src/lib/ai-provider.ts` 中读取字段为准。
+```text
+AI_BASE_URL
+AI_API_KEY
+AI_MODEL
 
-建议做法：
+DEEPSEEK_BASE_URL
+DEEPSEEK_API_KEY
 
-1. 打开 `src/lib/ai-provider.ts`，确认读取了哪些 `process.env.*`。
-2. 在 `.env.local` 中逐项补齐。
-3. 本地先通过 `/api/triage/route` 最小请求验证连通性。
+OPENAI_BASE_URL
+OPENAI_API_KEY
+```
 
----
+默认 `AI_BASE_URL` 为 `https://api.deepseek.com/v1`，默认模型为 `deepseek-v4-flash`。
 
-## 6. 主要 API（面向联调）
+## 主 API
 
-以下接口均为 Next.js Route Handler：
+### `POST /api/chat`
 
-- `POST /api/triage`
-  - 主分诊入口，返回路由决策与结果对象。
-- `POST /api/triage/intake`
-  - intake 阶段的处理逻辑。
-- `POST /api/triage/route-plan`
-  - 生成科研执行路径（Plan）。
-- `POST /api/generate-answer`
-  - 生成面向用户的答案文本。
-- `POST /api/recommend-service`
-  - 推荐下一步服务或能力模块。
+请求：
 
-联调建议：优先跑通 `POST /api/triage`，再分拆验证子接口。
+```json
+{
+  "message": "我想研究AI怎么帮助中学生学习物理",
+  "sessionId": "client-generated-id"
+}
+```
 
----
+响应：
 
-## 7. Prompt 工作流说明
+```json
+{
+  "reply": "回复文本",
+  "questions": ["结构化选项"],
+  "profile": {},
+  "profileConfidence": {},
+  "phase": "profiling",
+  "plan": {}
+}
+```
 
-`prompt_templates/` 下模板按职责拆分，便于工程化维护：
+阶段：
 
-- `input_normalizer.md`：输入规范化
-- `triage_classifier.md`：问题分诊分类
-- `response_router.md`：输出路由
-- `need_clarifier.md`：补充追问
-- `service_recommender.md`：服务推荐
-- `answer_generator.md`：答案生成
-- `quality_checker.md`：质量检查
+```text
+greeting -> profiling -> clarifying -> planning -> reviewing
+```
 
-### 维护建议
+规则：
 
-- 每次改 Prompt 时，附带“预期行为变更说明 + 示例输入输出”。
-- 将 Prompt 变更与 `src/lib/ai-triage.ts` 的解析逻辑一起 review，避免字段漂移。
+- `questions` 非空时，前端渲染为按钮。
+- 用户点击 Plan 面板中的“更简单 / 更专业 / 拆开讲 / 换方向”会回到 `/api/chat`，生成新版本 Plan。
+- AI 调用失败时返回 `_fallback: true` 和规则选项，不直接让主流程崩溃。
 
----
+### `GET /api/userspace/{sessionId}`
 
-## 8. 测试与调试
+返回当前会话文件清单。
 
-仓库内提供了面向 DeepSeek 的调试脚本：
+### `GET /api/userspace/{sessionId}/{filename}`
 
-- `scripts/test-deepseek.ts`
-- `scripts/test-deepseek-simple.js`
+返回指定 Markdown 文件内容，供文档面板渲染。
 
-可用于快速验证模型连接与最小调用链路。建议在本地配置好环境变量后执行。
+## userspace
 
-此外，建议增加：
+AI 生成的用户可见产物写入：
 
-- API 层契约测试（请求/响应 JSON schema）。
-- Prompt 输出稳定性测试（关键字段快照）。
-- 端到端流程测试（从 intake 到 result）。
+```text
+userspace/{sessionId}/
+  manifest.json
+  profile.md
+  plan-v1.md
+  plan-v2.md
+```
 
----
+`userspace/` 已加入 `.gitignore`。本地开发可直接检查文件内容来调试 Plan 和画像。
 
-## 9. 开发约定（当前阶段）
+## 验证命令
 
-- 类型优先：新增字段先更新 `triage-types.ts`。
-- API 兼容：对前端消费字段保持向后兼容。
-- Prompt 改动最小化：每次只改一个职责模板，便于回归。
-- 先可观测再优化：关键节点打印结构化日志（注意脱敏）。
+```bash
+npm run typecheck
+npm run test
+npm run build
+```
 
----
+当前主链路 smoke 测试建议：
 
-## 10. 里程碑建议
+```bash
+curl -X POST http://localhost:3010/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"我想研究AI怎么帮助中学生学习物理","sessionId":"smoke-chat"}'
+```
 
-短期（开发可用）建议优先级：
+## Phase 4 扩展方向
 
-1. 固化 triage 主链路返回协议。
-2. 加入基础错误码与错误分类。
-3. 建立最小自动化测试（API + Prompt 解析）。
-4. 接入轻量观测（请求耗时、模型失败率、重试率）。
-
----
-
-## 11. 分支说明
-
-当前开发分支已作为主线候选，建议后续以 `main` 作为默认集成分支，功能开发通过 feature 分支合并进入主线。
-
+- 将 `/api/chat` 内联 prompt 拆成独立 agent/prompt 模块。
+- 补充 API 层契约测试，覆盖 JSON 解析失败、AI 失败 fallback、Plan 版本递增。
+- 增加 userspace 文档生成阶段，例如 `summary.md`、`action-checklist.md`。
+- 加入 Plan 版本对比视图。
+- 将内存 session store 替换为可部署存储，支持多实例运行。

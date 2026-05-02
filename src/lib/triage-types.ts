@@ -107,126 +107,54 @@ export type TriageResponse = {
   safetyMode: boolean;
 };
 
-export type RoutePlanRequest = {
-  intake: IntakeRequest;
-  triage: TriageResponse;
+// ─── Chat & Session Types (MVP) ──────────────────────────────────
+
+/** Single chat message */
+export type ChatMessage = {
+  role: "user" | "assistant" | "system";
+  content: string;
+  questions?: string[];
+  process?: string;              // 可展示的流程摘要，不承载模型内部推理文本
+  timestamp: number;
 };
 
-export type RoutePlanResponse = {
-  overview: string;
-  deliverables: string[];
-  routeSteps: { phase: string; tasks: string[] }[];
-  fallbackPlan: string[];
-  teacherTalkingPoints: string[];
+/** User profile — flat API version (PRD §11.1, 10 fields) */
+export type UserProfileState = {
+  ageOrGeneration: string;       // 年龄段/时代背景
+  educationLevel: string;        // 教育水平
+  toolAbility: string;           // 工具使用能力
+  aiFamiliarity: string;         // AI 熟悉程度
+  researchFamiliarity: string;   // 科研理解程度
+  interestArea: string;          // 兴趣方向
+  currentBlocker: string;        // 当前卡点
+  deviceAvailable: string;       // 可投入设备
+  timeAvailable: string;         // 可投入时间
+  explanationPreference: string; // 偏好解释风格
 };
 
-export type TriageFieldErrors = Partial<Record<keyof IntakeRequest, string>>;
-
-export const defaultIntakeValues: IntakeRequest = {
-  taskType: "课程项目",
-  currentBlocker: "看不懂题目",
-  backgroundLevel: "完全小白",
-  deadline: "1 周内",
-  goalType: "先看懂课题",
-  topicText: "",
+/** Plan state — displayed in PlanPanel (PRD §8.5 + §11.3) */
+export type PlanState = {
+  userProfile: string;           // 用户画像摘要
+  problemJudgment: string;       // 当前问题判断
+  systemLogic: string;           // 系统判断逻辑
+  recommendedPath: string;       // 推荐路径
+  actionSteps: string[];         // 可执行步骤
+  riskWarnings: string[];        // 风险提示
+  nextOptions: string[];         // 下一步选择
+  version: number;               // 当前版本号
+  modifiedReason?: string;       // 修改原因
+  userFeedback?: string;         // 用户反馈摘要
+  isCurrent: boolean;            // 是否当前采用版本
 };
 
-// ─── P0 AI Pipeline Types ────────────────────────────────────────
-
-/** Structured input normalized from raw intake + topic text */
-export type NormalizedInput = {
-  topic: string;
-  taskType: string;
-  deadline: string;
-  userBackground: string;
-  painPoint: string;
-  targetOutput: string;
-  missingFields: string[];
+/** File manifest entry for userspace/ */
+export type FileManifest = {
+  filename: string;
+  title: string;
+  type: "profile" | "plan" | "checklist" | "path" | "summary" | "image";
+  version: number;
+  createdAt: string;
 };
 
-/** A-E user type for the AI pipeline */
-export type UserTypeCode = "A" | "B" | "C" | "D" | "E";
-
-export const userTypeMap: Record<UserTypeCode, UserProfile> = {
-  A: "完全小白型",
-  B: "基础薄弱型",
-  C: "普通项目型",
-  D: "科研能力型",
-  E: "焦虑决策型",
-};
-
-export const userTypeReverseMap: Record<UserProfile, UserTypeCode> = {
-  完全小白型: "A",
-  基础薄弱型: "B",
-  普通项目型: "C",
-  科研能力型: "D",
-  焦虑决策型: "E",
-};
-
-export type TriageResult = {
-  userType: UserTypeCode;
-  secondaryType?: UserTypeCode;
-  confidence: number;
-  taskStage: string;
-  difficulty: "低" | "中" | "中高" | "高";
-  riskList: string[];
-  reason: string;
-};
-
-export type ClarificationDecision = {
-  needClarification: boolean;
-  questions: string[];
-  readyToGenerate: boolean;
-};
-
-export type AnswerRoute = {
-  answerMode:
-    | "plain_explain"
-    | "execution_focused"
-    | "mvp_planning"
-    | "research_review"
-    | "anxiety_reduction";
-  mustInclude: string[];
-  mustAvoid: string[];
-};
-
-export type GeneratedAnswer = {
-  answerText: string;
-  nextSteps: string[];
-  riskNotes: string[];
-  downgradePlan: string;
-  teacherScript: string;
-};
-
-export type QualityCheck = {
-  pass: boolean;
-  matchUserType: boolean;
-  hasNextStep: boolean;
-  hasRisk: boolean;
-  hasDowngradePlan: boolean;
-  tooComplex: boolean;
-  tooGeneric: boolean;
-  commercialRecommendationReasonable: boolean;
-  revisionInstruction: string;
-};
-
-export type ServiceRecommendation = {
-  recommendedService: string;
-  reason: string;
-  notRecommended: string;
-  cta: string;
-};
-
-/** Combined response from the AI triage endpoint */
-export type AiTriageResponse = {
-  normalized: NormalizedInput;
-  triage: TriageResult;
-  clarification: ClarificationDecision;
-  route: AnswerRoute;
-};
-
-/** Combined response from the generate-answer endpoint */
-export type GenerateAnswerResponse = {
-  answer: GeneratedAnswer;
-  quality: QualityCheck;
-};
+/** Chat session phases */
+export type Phase = "greeting" | "profiling" | "clarifying" | "planning" | "reviewing";

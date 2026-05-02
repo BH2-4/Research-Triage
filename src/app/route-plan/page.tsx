@@ -1,5 +1,5 @@
-import { RoutePlanView } from "../../components/route-plan-view";
+import { redirect } from "next/navigation";
 
 export default function RoutePlanPage() {
-  return <RoutePlanView />;
+  redirect("/");
 }
