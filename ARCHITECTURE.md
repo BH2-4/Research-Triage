@@ -1,6 +1,6 @@
-# 人人都能做科研 — Phase 1-3 整合架构
+# 人人都能做科研 — Phase 1-4 整合架构
 
-> 本文档描述当前真实代码架构。Phase 4 继续基于本架构扩展，不恢复旧表单式 `/api/triage` 管线。
+> 本文档描述当前真实代码架构。Phase 4 已基于原主链路完成扩展，不恢复旧表单式 `/api/triage` 管线。
 
 ## 1. 架构目标
 
@@ -25,10 +25,10 @@ MVP 只验证一个核心闭环：
 | 语言 | TypeScript | 前后端共享类型 |
 | UI | React 19 | 客户端状态使用 `useState` + `sessionStorage` |
 | AI Provider | 裸 `fetch` 调 OpenAI-compatible API | 避免 SDK 兼容问题 |
-| Prompt/Skill | `skills/*.md` + `/api/chat` 阶段指令 | Phase 4 可继续拆为 agent 模块 |
+| Prompt/Skill | `skills/*.md` + `src/lib/chat-prompts.ts` | 阶段 prompt 独立，route handler 只做编排 |
 | 存储 | 内存 Map + `userspace/` 磁盘文件 | MVP 足够，后续可替换为 DB/Object Storage |
 | Markdown | `marked` | Plan/文档预览 |
-| 测试 | Vitest + TypeScript build | 当前覆盖规则 fallback 基础模块 |
+| 测试 | Vitest + TypeScript build | 覆盖规则 fallback、userspace、chat 协议解析 |
 
 ## 3. 前端结构
 
@@ -42,6 +42,7 @@ ChatPage (/)
   SidePanel
     ProfileCard 内联
     PlanPanel
+    PlanHistoryPanel
     FileList
     DocPanel
 ```
@@ -60,12 +61,13 @@ ChatPage (/)
 
 ## 4. 后端 API
 
-当前仅保留三个运行时 API：
+当前仅保留主对话和 userspace 两类运行时 API：
 
 ```text
 POST /api/chat
 GET  /api/userspace/{sessionId}
 GET  /api/userspace/{sessionId}/{filename}
+POST /api/userspace/{sessionId}/{filename}?action=open
 ```
 
 ### 4.1 `/api/chat`
@@ -78,7 +80,7 @@ GET  /api/userspace/{sessionId}/{filename}
 - 调用 AI provider。
 - 解析 AI JSON 输出。
 - 生成或调整 Plan。
-- 写入 `userspace/`。
+- 写入 `userspace/`，同步生成摘要、行动清单、科研路径文档；需要代码或 Demo 时同步生成独立代码文件。
 - 在 AI 调用失败时返回规则 fallback。
 
 阶段机：
@@ -98,8 +100,8 @@ greeting
 | greeting | 首次引导 | `reply`, `questions` |
 | profiling | 提取画像字段 | `profile`, `profileConfidence`, `questions` |
 | clarifying | Plan 前置检查 | 假设确认、追问选项 |
-| planning | 生成 Plan | `plan-v{n}.md` |
-| reviewing | 根据用户反馈调整 Plan | 新版本 `plan-v{n}.md` |
+| planning | 生成 Plan | `plan-v{n}.md`, `summary.md`, `action-checklist.md`, `research-path.md`，必要时生成 `code-v{n}-*` |
+| reviewing | 根据用户反馈调整 Plan | 新版本 `plan-v{n}.md`，并刷新配套文档和必要代码文件 |
 
 ### 4.2 `/api/userspace/{sessionId}`
 
@@ -107,7 +109,9 @@ greeting
 
 ### 4.3 `/api/userspace/{sessionId}/{filename}`
 
-返回指定文件内容。`userspace.ts` 会校验 `sessionId` 和 `filename`，避免路径穿越。
+返回指定文件内容。`?raw=1` 返回原始文本，供浏览器直接打开或下载。
+
+同一路由支持 `POST ?action=open`，在本地开发环境中通过系统默认应用打开文件。该能力仍复用 `userspace.ts` 的路径校验，不新增业务管线。
 
 ## 5. 数据模型
 
@@ -172,12 +176,18 @@ userspace/{sessionId}/
   profile.md
   plan-v1.md
   plan-v2.md
+  summary.md
+  action-checklist.md
+  research-path.md
+  code-v2-demo.py
 ```
 
 规则：
 
 - `profile.md` 在画像有信号时写入。
 - `plan-v{n}.md` 在 planning/reviewing 阶段写入。
+- `summary.md`、`action-checklist.md`、`research-path.md` 随当前 Plan 刷新，manifest 保留其类型和版本。
+- `code-v{n}-*` 仅在 Plan 协议返回 `codeFiles` 时生成，manifest 记录 `type: "code"` 和 `language`，供右侧面板预览、原文打开、下载或系统默认应用打开。
 - 旧 Plan 不删除，manifest 保留版本元数据。
 - 服务重启后可从 `profile.md` 和最新 Plan 文件恢复基础状态。
 
@@ -186,13 +196,14 @@ userspace/{sessionId}/
 系统对 AI 输出做了以下防护：
 
 - JSON 提取支持纯 JSON、代码块 JSON、正文中 JSON。
+- JSON 提取支持模型在协议 JSON 前后夹杂说明文本，并优先提取包含 `reply/questions/plan/codeFiles` 的协议对象。
 - Plan 字段支持多种命名风格归一化。
 - actionSteps/riskWarnings 支持字符串和对象格式。
-- planning/reviewing 输出统一要求 JSON，避免“有时 markdown、有时 JSON”的协议漂移。
+- planning/reviewing 输出统一要求 JSON；若解析失败，会重试一次并禁止把协议 JSON 原文泄漏到聊天气泡。
 - AI 调用失败时返回 `_fallback: true` 和规则选项，不让主流程直接崩溃。
 - userspace API 校验路径片段，避免非法文件访问。
 
-Phase 4 应补充自动化契约测试覆盖这些防护。
+自动化契约测试覆盖这些防护。
 
 ## 8. 已清理的旧框架
 
@@ -220,16 +231,22 @@ src/lib/triage.test.ts
 
 保留原因：规则分诊逻辑可作为 Phase 4 AI 失败 fallback 的基础模块，且已有测试覆盖。
 
-## 9. Phase 4 扩展位
+## 9. Phase 4 已完成扩展
 
-建议按以下方向扩展：
+当前已完成：
 
-- 把 `/api/chat/route.ts` 中的阶段 prompt 拆到 `src/lib/chat-prompts.ts` 或 `prompt_templates/chat/*.md`。
-- 把 Plan 生成和 Review 调整拆成 `src/lib/chat-pipeline.ts`，让 route handler 只负责编排。
+- 阶段 prompt 拆到 `src/lib/chat-prompts.ts`。
+- Plan 解析、归一化、持久化和流程摘要拆到 `src/lib/chat-pipeline.ts`。
 - 增加 `summary.md`、`action-checklist.md`、`research-path.md` 文档生成。
+- 增加代码文件产物生成：任务需要代码、脚本、配置或 Demo 时，AI 通过 `codeFiles` 协议输出独立文件，服务端写入 userspace。
 - 增加 Plan 历史版本对比视图。
-- 增加契约测试：AI 非 JSON、字段缺失、Plan 版本递增、userspace 路径校验、fallback。
-- 将内存 Map 替换为持久会话存储，以支持 Vercel/多实例部署。
+- 增加契约测试：AI 非 JSON、混入说明文本的 JSON、Plan 字段归一化、userspace 路径校验、文档产物写入、代码产物写入。
+
+后续仍可扩展：
+
+- 将服务端内存 Map 替换为持久会话存储，以支持 Vercel/多实例部署。
+- 增加更强的人工审核记录和 Plan 质量评分。
+- 增加图片/图示产物，但不得破坏当前 `/api/chat + userspace + 单页工作台` 主链路。
 
 ## 10. 当前边界
 

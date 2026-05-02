@@ -7,6 +7,7 @@ type Props = {
   sessionId: string;
   onFileSelect: (filename: string) => void;
   refreshTrigger?: number; // increment to force refresh
+  onFilesChange?: (files: FileManifest[]) => void;
 };
 
 const typeIcons: Record<string, string> = {
@@ -16,9 +17,10 @@ const typeIcons: Record<string, string> = {
   path: "🗺",
   summary: "📄",
   image: "🖼",
+  code: "💻",
 };
 
-export function FileList({ sessionId, onFileSelect, refreshTrigger }: Props) {
+export function FileList({ sessionId, onFileSelect, refreshTrigger, onFilesChange }: Props) {
   const [files, setFiles] = useState<FileManifest[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -29,11 +31,13 @@ export function FileList({ sessionId, onFileSelect, refreshTrigger }: Props) {
       const resp = await fetch(`/api/userspace/${encodeURIComponent(sessionId)}`);
       if (resp.ok) {
         const data = await resp.json();
-        setFiles(data.files ?? []);
+        const nextFiles = data.files ?? [];
+        setFiles(nextFiles);
+        onFilesChange?.(nextFiles);
       }
     } catch { /* ignore */ }
     finally { setLoading(false); }
-  }, [sessionId]);
+  }, [sessionId, onFilesChange]);
 
   useEffect(() => {
     loadFiles();
@@ -62,6 +66,7 @@ export function FileList({ sessionId, onFileSelect, refreshTrigger }: Props) {
               <span className="file-icon">{typeIcons[f.type] ?? "📄"}</span>
               <span className="file-name">{f.title}</span>
               {f.type === "plan" && <span className="file-version">v{f.version}</span>}
+              {f.type === "code" && <span className="file-version">{f.language ?? "code"}</span>}
             </button>
           </li>
         ))}

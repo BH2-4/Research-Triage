@@ -1,3 +1,4 @@
+import { execFileSync, spawn } from "child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import path from "path";
 import type { FileManifest } from "./triage-types";
@@ -49,12 +50,78 @@ export function readFile(
   return readFileSync(fullPath, "utf-8");
 }
 
+export function getExistingFilePath(
+  sessionId: string,
+  filename: string,
+): string | null {
+  const fullPath = filePath(sessionId, filename);
+  return existsSync(fullPath) ? fullPath : null;
+}
+
+function isWsl(): boolean {
+  return process.platform === "linux" && Boolean(process.env.WSL_DISTRO_NAME);
+}
+
+function openDetached(command: string, args: string[]): void {
+  const child = spawn(command, args, {
+    detached: true,
+    stdio: "ignore",
+  });
+  child.on("error", () => { /* opening is best-effort */ });
+  child.unref();
+}
+
+export function openFileWithSystemDefault(
+  sessionId: string,
+  filename: string,
+): { ok: boolean; message: string } {
+  const fullPath = getExistingFilePath(sessionId, filename);
+  if (!fullPath) {
+    return { ok: false, message: "File not found" };
+  }
+
+  try {
+    if (process.platform === "win32") {
+      openDetached("cmd.exe", ["/c", "start", "", fullPath]);
+      return { ok: true, message: "Opened with system default app" };
+    }
+
+    if (process.platform === "darwin") {
+      openDetached("open", [fullPath]);
+      return { ok: true, message: "Opened with system default app" };
+    }
+
+    if (isWsl()) {
+      const windowsPath = execFileSync("wslpath", ["-w", fullPath], {
+        encoding: "utf-8",
+      }).trim();
+      openDetached("cmd.exe", ["/c", "start", "", windowsPath]);
+      return { ok: true, message: "Opened with system default app" };
+    }
+
+    openDetached("xdg-open", [fullPath]);
+    return { ok: true, message: "Opened with system default app" };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Failed to open file",
+    };
+  }
+}
+
 /** Get the manifest for a session, creating it if it does not exist. */
 export function getManifest(sessionId: string): FileManifest[] {
   const raw = readFile(sessionId, "manifest.json");
   if (!raw) return [];
   try {
-    return JSON.parse(raw) as FileManifest[];
+    const parsed = JSON.parse(raw) as FileManifest[];
+    return parsed.filter((entry) => {
+      try {
+        return existsSync(filePath(sessionId, entry.filename));
+      } catch {
+        return false;
+      }
+    });
   } catch {
     return [];
   }
@@ -115,5 +182,43 @@ export function savePlan(
     type: "plan",
     version,
     createdAt: new Date().toISOString(),
+  });
+}
+
+/** Save a non-plan markdown artifact into userspace and update manifest. */
+export function saveMarkdownDocument(
+  sessionId: string,
+  filename: string,
+  title: string,
+  type: Extract<FileManifest["type"], "checklist" | "path" | "summary">,
+  content: string,
+  version = 1,
+): void {
+  writeFile(sessionId, filename, content);
+  upsertManifest(sessionId, {
+    filename,
+    title,
+    type,
+    version,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+export function saveCodeFile(
+  sessionId: string,
+  filename: string,
+  title: string,
+  language: string,
+  content: string,
+  version: number,
+): void {
+  writeFile(sessionId, filename, content);
+  upsertManifest(sessionId, {
+    filename,
+    title,
+    type: "code",
+    version,
+    createdAt: new Date().toISOString(),
+    language,
   });
 }

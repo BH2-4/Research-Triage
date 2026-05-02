@@ -626,6 +626,64 @@ button {
   color: var(--accent);
 }
 
+.plan-history-panel {
+  margin-top: 1rem;
+}
+
+.plan-history-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.plan-history-controls select {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--ink);
+}
+
+.plan-history-arrow {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.plan-history-summary {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--secondary-soft);
+  color: var(--secondary);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.plan-history-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.plan-history-actions button {
+  flex: 1;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-strong);
+  color: var(--muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.plan-history-actions button:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .file-list {
   margin: 10px 0 0;
 }
@@ -681,6 +739,37 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
+}
+
+.doc-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.doc-action-link {
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-decoration: none;
+}
+
+.doc-action-button {
+  background: transparent;
+  cursor: pointer;
+}
+
+.doc-action-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.doc-action-link:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .doc-close-btn {
@@ -710,9 +799,33 @@ button {
   font-size: 0.75rem;
 }
 
+.doc-code-lang {
+  display: inline-flex;
+  margin: 4px 0 8px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--secondary-soft);
+  color: var(--secondary);
+  font-size: 0.72rem;
+}
+
 .doc-body {
   border-top: 1px solid var(--line);
   padding-top: 10px;
+}
+
+.doc-code-block {
+  margin: 10px 0 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--ink);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  overflow: auto;
+  white-space: pre;
 }
 
 @media (max-width: 900px) {

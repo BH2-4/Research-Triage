@@ -5,6 +5,8 @@ import type { PlanState, UserProfileState } from "../lib/triage-types";
 import { PlanPanel } from "./plan-panel";
 import { FileList } from "./file-list";
 import { DocPanel } from "./doc-panel";
+import { PlanHistoryPanel } from "./plan-history-panel";
+import type { FileManifest } from "../lib/triage-types";
 
 type Props = {
   profile?: UserProfileState | null;
@@ -47,6 +49,7 @@ export function SidePanel({
 }: Props) {
   const hasProfile = profile && Object.values(profile).some((v) => v);
   const [activeFile, setActiveFile] = useState<string | null>(null);
+  const [files, setFiles] = useState<FileManifest[]>([]);
 
   return (
     <div className="side-panel">
@@ -100,11 +103,18 @@ export function SidePanel({
         </div>
       ) : null}
 
+      <PlanHistoryPanel
+        sessionId={sessionId}
+        files={files}
+        onFileSelect={(f) => setActiveFile(f)}
+      />
+
       {/* File List */}
       <FileList
         sessionId={sessionId}
         onFileSelect={(f) => setActiveFile(f)}
         refreshTrigger={fileRefresh}
+        onFilesChange={setFiles}
       />
 
       {/* Doc Preview */}

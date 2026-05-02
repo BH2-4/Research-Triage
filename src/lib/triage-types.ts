@@ -147,13 +147,22 @@ export type PlanState = {
   isCurrent: boolean;            // 是否当前采用版本
 };
 
+export type CodeFileArtifact = {
+  filename: string;
+  title: string;
+  language: string;
+  content: string;
+  version: number;
+};
+
 /** File manifest entry for userspace/ */
 export type FileManifest = {
   filename: string;
   title: string;
-  type: "profile" | "plan" | "checklist" | "path" | "summary" | "image";
+  type: "profile" | "plan" | "checklist" | "path" | "summary" | "image" | "code";
   version: number;
   createdAt: string;
+  language?: string;
 };
 
 /** Chat session phases */

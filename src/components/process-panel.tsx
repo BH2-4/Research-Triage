@@ -20,7 +20,7 @@ export function ProcessPanel({ process }: Props) {
         onClick={() => setOpen((v) => !v)}
       >
         <span className="process-icon">{open ? "▼" : "▶"}</span>
-        思考流程
+        处理摘要
       </button>
       {open && (
         <div

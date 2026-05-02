@@ -152,7 +152,15 @@ const PLAN_JSON_SCHEMA = `{
     "actionSteps": ["步骤1：具体动作、时限、验证方式", "步骤2：..."],
     "riskWarnings": ["风险1", "风险2"],
     "nextOptions": ["更简单", "更专业", "拆开讲", "换方向"]
-  }
+  },
+  "codeFiles": [
+    {
+      "filename": "示例文件名，如 planar_2r_forward.m",
+      "title": "代码文件标题",
+      "language": "matlab/python/typescript 等",
+      "content": "文件完整内容"
+    }
+  ]
 }`;
 
 export const PLANNING_INSTRUCTION = `你是「人人都能做科研」的科研启蒙引导者。用户画像已确认，问题已收敛，现在生成科研探索 Plan。
@@ -166,6 +174,9 @@ ${PLAN_JSON_SCHEMA}
 - 不确定的地方标注"推断中"
 - actionSteps 必须是 3-7 个可执行步骤，每步包含动作、时限、验证方法
 - riskWarnings 必须直接对应用户当前约束
+- 当任务明确需要代码、脚本、配置文件、Demo 骨架时，必须输出 "codeFiles"
+- "codeFiles" 中每个文件都必须是最小可运行或最小可验证版本，"content" 写完整代码，不要写解释
+- 如果当前任务不需要代码，返回 {"codeFiles": []}
 - reply 不得重复完整 Plan 内容`;
 
 const REVIEWING_INSTRUCTION = `你是「人人都能做科研」的科研启蒙引导者。用户正在挑战或调整已有 Plan。
@@ -178,6 +189,7 @@ ${PLAN_JSON_SCHEMA}
 - 只根据用户反馈调整必要部分，但返回完整 Plan
 - systemLogic 必须说明本次修改相对上一版改变了什么
 - actionSteps 仍必须具体可执行
+- 如果本轮调整后仍需要代码文件，也必须同步返回更新后的 "codeFiles"
 - reply 用一句话说明 Plan 已按反馈更新`;
 
 export function getInstructionForPhase(phase: Phase): string {

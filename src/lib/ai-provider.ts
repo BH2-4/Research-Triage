@@ -37,6 +37,7 @@ interface ChatOptions {
   model?: string;
   temperature?: number;
   maxTokens?: number;
+  traceLabel?: string;
   /** Single-turn convenience: prompt + optional system. */
   prompt?: string;
   system?: string;
@@ -70,7 +71,11 @@ export async function chat(opts: ChatOptions): Promise<ChatResult> {
   if (opts.maxTokens) body.max_tokens = opts.maxTokens;
 
   const url = `${BASE.replace(/\/$/, "")}/chat/completions`;
-  console.log(`[chat] POST ${url} model=${body.model} msgs=${messages.length} key=${API_KEY ? "yes(len=" + API_KEY.length + ")" : "MISSING!"}`);
+  const traceLabel = opts.traceLabel ? ` ${opts.traceLabel}` : "";
+  const startedAt = Date.now();
+  console.log(
+    `[chat] start${traceLabel} model=${body.model} msgs=${messages.length} maxTokens=${body.max_tokens ?? "-"} key=${API_KEY ? "yes" : "missing"}`,
+  );
 
   const resp = await fetch(url, {
     method: "POST",
@@ -83,6 +88,9 @@ export async function chat(opts: ChatOptions): Promise<ChatResult> {
 
   if (!resp.ok) {
     const errText = await resp.text().catch(() => "");
+    console.warn(
+      `[chat] failed${traceLabel} status=${resp.status} latencyMs=${Date.now() - startedAt}`,
+    );
     throw new Error(
       `API ${resp.status} ${resp.statusText}: ${errText.slice(0, 300)}`,
     );
@@ -99,6 +107,10 @@ export async function chat(opts: ChatOptions): Promise<ChatResult> {
       `API returned empty content. Raw: ${JSON.stringify(json).slice(0, 300)}`,
     );
   }
+
+  console.log(
+    `[chat] success${traceLabel} latencyMs=${Date.now() - startedAt} contentChars=${content.length}`,
+  );
 
   return { content };
 }

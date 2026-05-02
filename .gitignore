@@ -1,7 +1,5 @@
-#all
+# local notes
 NEXT_STEPS_PLAN.md
-.env
-.env.example
 
 # dependencies
 node_modules/
@@ -14,6 +12,7 @@ out/
 
 # production
 build/
+dist/
 
 # misc
 .DS_Store
@@ -24,13 +23,17 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+*.log
 
 # local env files
-.env*.local
 .env
+.env.*
+!.env.example
+.env*.local
 
 # vercel
-.vercel
+.vercel/
 
 # typescript
 *.tsbuildinfo
@@ -39,5 +42,5 @@ next-env.d.ts
 # testing
 coverage/
 
-# user space
-userspace/
+# generated user/session artifacts
+/userspace/

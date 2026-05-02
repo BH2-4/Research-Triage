@@ -1,10 +1,10 @@
-# 人人都能做科研 — Phase 1-3 整合验收记录
+# 人人都能做科研 — Phase 1-4 整合验收记录
 
 > 本文档是当前代码状态的整合检查结果，不再是待执行任务清单。
 
 ## 总体结论
 
-Phase 1-3 已整合为一个可运行的 MVP 主链路：
+Phase 1-4 已整合为一个可运行的 MVP 主链路：
 
 ```text
 单页工作台
@@ -12,11 +12,12 @@ Phase 1-3 已整合为一个可运行的 MVP 主链路：
   -> 用户画像 Memory
   -> Clarify-or-Block
   -> Plan 生成/调整
+  -> 摘要/清单/路径/必要代码文件生成
   -> userspace 文件沉淀
-  -> 右侧 Plan/Doc 展示
+  -> 右侧 Plan/Doc/历史对比展示
 ```
 
-旧表单式 `/api/triage` 管线已清理，Phase 4 继续扩展 `/api/chat`。
+旧表单式 `/api/triage` 管线已清理。Phase 4 已继续扩展 `/api/chat`，没有恢复旧流程。
 
 ## Phase 1：骨架搭建
 
@@ -57,6 +58,7 @@ Phase 1-3 已整合为一个可运行的 MVP 主链路：
 | FileList + DocPanel | 已完成 | `file-list.tsx`, `doc-panel.tsx` |
 | Plan 版本保存 | 已完成 | `userspace/plan-v{n}.md` |
 | 用户空间文件预览 API | 已完成 | `/api/userspace/{sessionId}/{filename}` |
+| 代码产物独立保存 | 已完成 | `codeFiles` 协议 + `userspace/code-v{n}-*` |
 
 补充修正：
 
@@ -64,7 +66,26 @@ Phase 1-3 已整合为一个可运行的 MVP 主链路：
 - clarifying 检查通过后会在同一轮生成 Plan。
 - Plan 面板中的“更简单 / 更专业 / 拆开讲 / 换方向”已接回 `/api/chat`，会生成新版本 Plan。
 - `DocPanel` 请求已移入 `useEffect`，避免渲染阶段发起网络请求。
+- 课题需要代码、脚本、配置或 Demo 时，代码会保存为独立文件，并可在右侧面板预览、原文打开、下载或尝试用系统默认应用打开。
 - 服务重启后可从 userspace 恢复 profile 和最新 Plan 的基础状态。
+
+## Phase 4：架构拆分与产物增强
+
+| 项目 | 状态 | 当前实现 |
+|---|---|---|
+| 阶段 prompt 拆分 | 已完成 | `src/lib/chat-prompts.ts` |
+| Chat pipeline 拆分 | 已完成 | `src/lib/chat-pipeline.ts` |
+| 配套文档产物 | 已完成 | `summary.md`, `action-checklist.md`, `research-path.md` |
+| 代码文件产物 | 已完成 | `CodeFileArtifact`, `saveCodeFile`, `codeFiles` 协议 |
+| Plan 历史对比 | 已完成 | `src/components/plan-history-panel.tsx` |
+| 契约测试 | 已完成 | `src/lib/chat-pipeline.test.ts`, `userspace.test.ts` |
+
+补充修正：
+
+- `/api/chat/route.ts` 保持为请求校验、会话恢复、AI 调用和阶段推进的编排层。
+- planning/reviewing 阶段若模型在 JSON 前后混入说明文本，会优先提取协议 JSON。
+- 如果 Plan 协议解析失败，不再把 JSON 原文放进聊天框，避免协议数据泄漏到 UI。
+- `ProcessPanel` 从“思考流程”改为“处理摘要”，并明确显示 `AI 生成` 或 `规则兜底`。
 
 ## 已清理旧代码
 
@@ -107,19 +128,18 @@ npm run build
 - `/` 返回 200。
 - `/intake` 返回 307 并跳转 `/`。
 - `/api/userspace/{sessionId}` 返回文件清单。
+- `/api/userspace/{sessionId}/{filename}?raw=1` 返回原始文本。
 - `/api/chat` 缺参返回 400。
 - `/api/chat` 真实模型调用可从 greeting 进入 profiling。
 - 画像补齐后进入 clarifying。
-- 假设确认后生成 `plan-v1.md`。
+- 假设确认后生成 `plan-v1.md`，如任务需要代码则生成 `code-v{n}-*`。
 - 在 reviewing 阶段发送“更简单”生成 `plan-v2.md`。
 
-## Phase 4 建议任务
+## 后续建议任务
 
 优先级从高到低：
 
-1. 增加 `/api/chat` 契约测试，覆盖 JSON 解析失败、AI 失败 fallback、Plan 字段缺失、版本递增。
-2. 把 `/api/chat/route.ts` 中的阶段 prompt 拆到独立模块。
-3. 把 Plan 生成/Review 调整逻辑拆出 route handler，形成可测试 pipeline。
-4. 增加 `summary.md`、`action-checklist.md`、`research-path.md` 文档产物。
-5. 实现 Plan 历史版本对比 UI。
-6. 将服务端内存 Map 替换成持久会话存储。
+1. 将服务端内存 Map 替换成持久会话存储，支持部署到多实例环境。
+2. 增加人工审核记录和 Plan 质量评分。
+3. 增加图片/图示产物展示，但继续复用 userspace 文档沉淀层。
+4. 强化规则 fallback，接入 `src/lib/triage.ts` 的分诊能力。
