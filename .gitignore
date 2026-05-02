@@ -1,5 +1,7 @@
 #all
 NEXT_STEPS_PLAN.md
+.env
+.env.example
 
 # dependencies
 node_modules/
