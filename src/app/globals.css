@@ -473,3 +473,34 @@ textarea {
     flex-direction: column;
   }
 }
+
+.plan-card {
+  margin-top: 18px;
+}
+
+.plan-options {
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.plan-option {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.plan-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.plan-focus {
+  margin-top: 14px;
+  border-top: 1px dashed var(--line);
+  padding-top: 14px;
+}
