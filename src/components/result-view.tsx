@@ -87,9 +87,38 @@ export function ResultView() {
     );
   }
 
+  const renderPlanWorkspace = () => (
+    <>
+      <PlanCard
+        goal="优化科研课题分诊台首页并形成可展示 MVP"
+        recommendation="推荐 D：先做黑客松 MVP，范围最小、最容易展示。"
+        options={defaultPlanOptions}
+        onSelect={(optionId) => {
+          const nextPath = [...selectedPath, optionId].slice(-8);
+          setSelectedPath(nextPath);
+          saveJson(lastPlanStateKey, nextPath);
+        }}
+      />
+
+      <article className="panel card-stack">
+        <span className="eyebrow">当前 Plan 路径</span>
+        <h2>你已经做出的选择</h2>
+        {selectedPath.length ? (
+          <ol className="step-list">
+            {selectedPath.map((item, index) => (
+              <li key={`${item}-${index}`}>{item}</li>
+            ))}
+          </ol>
+        ) : (
+          <p className="muted">还未选择路径。你可以在上方 Plan 卡片中选择 A/B/C/D。</p>
+        )}
+      </article>
+    </>
+  );
+
   // ─── AI Pipeline Result ──────────────────────────────────────
   if (hasAi && aiTriage && aiAnswer) {
-    const { triage, route } = aiTriage;
+    const { triage } = aiTriage;
     const { answer, service } = aiAnswer;
     const profileLabel = userTypeMap[triage.userType] ?? "用户";
 
@@ -186,30 +215,7 @@ export function ResultView() {
           </article>
         </div>
 
-        <PlanCard
-          goal="优化科研课题分诊台首页并形成可展示 MVP"
-          recommendation="推荐 D：先做黑客松 MVP，范围最小、最容易展示。"
-          options={defaultPlanOptions}
-          onSelect={(optionId) => {
-            const nextPath = [...selectedPath, optionId];
-            setSelectedPath(nextPath);
-            saveJson(lastPlanStateKey, nextPath);
-          }}
-        />
-
-        <article className="panel card-stack">
-          <span className="eyebrow">当前 Plan 路径</span>
-          <h2>你已经做出的选择</h2>
-          {selectedPath.length ? (
-            <ol className="step-list">
-              {selectedPath.map((item, index) => (
-                <li key={`${item}-${index}`}>{item}</li>
-              ))}
-            </ol>
-          ) : (
-            <p className="muted">还未选择路径。你可以在上方 Plan 卡片中选择 A/B/C/D。</p>
-          )}
-        </article>
+        {renderPlanWorkspace()}
 
         <div className="panel cta-strip">
           <div>
@@ -312,6 +318,8 @@ export function ResultView() {
           </Link>
         </div>
       </div>
+
+      {renderPlanWorkspace()}
     </section>
   );
 }
