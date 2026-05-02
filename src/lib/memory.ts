@@ -73,7 +73,7 @@ export function toAPIState(memory: UserProfileMemory): UserProfileState {
 export function profileToMarkdown(memory: UserProfileMemory): string {
   const lines = ["# 用户画像", ""];
   const label: Record<keyof UserProfileState, string> = {
-    ageOrGeneration: "年龄段",
+    ageOrGeneration: "代际",
     educationLevel: "教育水平",
     toolAbility: "工具能力",
     aiFamiliarity: "AI 熟悉度",

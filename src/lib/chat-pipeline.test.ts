@@ -81,6 +81,8 @@ describe("chat pipeline contracts", () => {
           { label: "社会观察", value: "社会观察" },
           "选项C",
           "自然科学",
+          "我不太理解这些，帮我找方向",
+          { label: "我不太理解这些，帮我找方向", value: "help" },
         ],
         confirmLabel: "确认这些方向",
       },
@@ -101,6 +103,7 @@ describe("chat pipeline contracts", () => {
       }),
     ]);
     expect(groups[0].options.some((option) => option.label === "选项C")).toBe(false);
+    expect(groups[0].options.filter((option) => option.value.includes("帮我找方向"))).toHaveLength(1);
   });
 
   it("builds a legacy single choice group from questions", () => {

@@ -172,6 +172,13 @@ function isValidChoiceText(value: string): boolean {
   return true;
 }
 
+function isEscapeChoiceText(value: string): boolean {
+  return value.includes("帮我找方向") ||
+    value.includes("自己描述") ||
+    value.includes("自定义") ||
+    value.includes("不太理解");
+}
+
 function choiceIdFromText(text: string, index: number): string {
   const id = text
     .trim()
@@ -239,15 +246,28 @@ function normalizeChoiceOptions(raw: unknown): ChoiceGroup["options"] {
 
 function ensureEscapeChoice(options: ChoiceGroup["options"]): ChoiceGroup["options"] {
   const escapeText = "我不太理解这些，帮我找方向";
-  const hasEscape = options.some((option) =>
-    option.value.includes("帮我找方向") ||
-    option.value.includes("自己描述") ||
-    option.value.includes("自定义"),
-  );
+  const normalized: ChoiceGroup["options"] = [];
+  let hasEscape = false;
+
+  for (const option of options) {
+    if (isEscapeChoiceText(option.label) || isEscapeChoiceText(option.value)) {
+      if (hasEscape) continue;
+      normalized.push({
+        id: "help-me-find-direction",
+        label: escapeText,
+        value: escapeText,
+        selected: option.selected,
+      });
+      hasEscape = true;
+    } else {
+      normalized.push(option);
+    }
+  }
+
   return hasEscape
-    ? options
+    ? normalized
     : [
-        ...options,
+        ...normalized,
         {
           id: "help-me-find-direction",
           label: escapeText,

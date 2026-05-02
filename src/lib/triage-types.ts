@@ -138,7 +138,7 @@ export type ChatMessage = {
 
 /** User profile — flat API version (PRD §11.1, 10 fields) */
 export type UserProfileState = {
-  ageOrGeneration: string;       // 年龄段/时代背景
+  ageOrGeneration: string;       // 代际标签，如 Z 世代、80 后、小学生、中年人
   educationLevel: string;        // 教育水平
   toolAbility: string;           // 工具使用能力
   aiFamiliarity: string;         // AI 熟悉程度

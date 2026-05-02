@@ -60,6 +60,8 @@ function isEscapeOptionValue(value: string): boolean {
     value.includes("不太理解");
 }
 
+type ChoiceSelectionState = Record<string, string[]>;
+
 export function nextChoiceSelection(
   group: ChoiceGroup,
   currentIds: string[],
@@ -86,28 +88,80 @@ export function nextChoiceSelection(
   return [...current];
 }
 
+export function choiceNeedsSubmit(groups: ChoiceGroup[]): boolean {
+  return groups.length > 1 || groups.some((group) => group.mode === "multiple");
+}
+
+export function nextChoiceState(
+  groups: ChoiceGroup[],
+  current: ChoiceSelectionState,
+  groupId: string,
+  optionId: string,
+): ChoiceSelectionState {
+  const group = groups.find((item) => item.id === groupId);
+  const option = group?.options.find((item) => item.id === optionId);
+  if (!group || !option) return current;
+
+  const isEscape = isEscapeOptionValue(option.value);
+  const wasSelected = (current[groupId] ?? []).includes(optionId);
+  if (isEscape) {
+    return wasSelected ? { ...current, [groupId]: [] } : { [groupId]: [optionId] };
+  }
+
+  const withoutEscapes: ChoiceSelectionState = {};
+  for (const candidateGroup of groups) {
+    const escapeIds = new Set(
+      candidateGroup.options
+        .filter((item) => isEscapeOptionValue(item.value))
+        .map((item) => item.id),
+    );
+    const kept = (current[candidateGroup.id] ?? []).filter((id) => !escapeIds.has(id));
+    if (kept.length > 0) withoutEscapes[candidateGroup.id] = kept;
+  }
+
+  if (group.mode === "multiple") {
+    return {
+      ...withoutEscapes,
+      [groupId]: nextChoiceSelection(group, withoutEscapes[groupId] ?? [], optionId),
+    };
+  }
+
+  return {
+    ...withoutEscapes,
+    [groupId]: wasSelected ? [] : [optionId],
+  };
+}
+
+export function selectedChoiceSummary(groups: ChoiceGroup[], selectedByGroup: ChoiceSelectionState): string {
+  return groups
+    .map((group) => selectedSummary(group, new Set(selectedByGroup[group.id] ?? [])))
+    .filter(Boolean)
+    .join("\n");
+}
+
 export function ChoiceButtons({ questions, choiceGroups, onSelect, disabled }: Props) {
   const groups = useMemo(
     () => (choiceGroups && choiceGroups.length > 0 ? choiceGroups : legacyChoiceGroup(questions)),
     [choiceGroups, questions],
   );
-  const [selectedByGroup, setSelectedByGroup] = useState<Record<string, string[]>>({});
+  const [selectedByGroup, setSelectedByGroup] = useState<ChoiceSelectionState>({});
 
   if (groups.length === 0) return null;
 
+  const needsSubmit = choiceNeedsSubmit(groups);
+
   const toggle = (group: ChoiceGroup, optionId: string) => {
     if (disabled) return;
-    setSelectedByGroup((prev) => {
-      return { ...prev, [group.id]: nextChoiceSelection(group, prev[group.id] ?? [], optionId) };
-    });
+    setSelectedByGroup((prev) => nextChoiceState(groups, prev, group.id, optionId));
   };
 
-  const confirm = (group: ChoiceGroup) => {
-    const selectedIds = new Set(selectedByGroup[group.id] ?? []);
-    const summary = selectedSummary(group, selectedIds);
+  const confirmAll = () => {
+    const summary = selectedChoiceSummary(groups, selectedByGroup);
     if (!summary || disabled) return;
     onSelect(summary);
   };
+
+  const selectedCount = Object.values(selectedByGroup).reduce((count, ids) => count + ids.length, 0);
 
   return (
     <div className="choice-buttons">
@@ -125,10 +179,10 @@ export function ChoiceButtons({ questions, choiceGroups, onSelect, disabled }: P
                     key={option.id}
                     className={`button button-choice${isEscape ? " button-choice-escape" : ""}${selected ? " button-choice-selected" : ""}`}
                     type="button"
-                    aria-pressed={group.mode === "multiple" ? selected : undefined}
+                    aria-pressed={needsSubmit ? selected : undefined}
                     disabled={disabled}
                     onClick={() => {
-                      if (group.mode === "multiple") {
+                      if (needsSubmit) {
                         toggle(group, option.id);
                       } else {
                         onSelect(option.value);
@@ -140,24 +194,24 @@ export function ChoiceButtons({ questions, choiceGroups, onSelect, disabled }: P
                 );
               })}
             </div>
-            {group.mode === "multiple" && (
-              <div className="choice-confirm-row">
-                <span className="choice-selected-text">
-                  {selectedIds.size > 0 ? `已选 ${selectedIds.size} 项` : "可多选"}
-                </span>
-                <button
-                  className="button button-choice-confirm"
-                  type="button"
-                  disabled={disabled || selectedIds.size === 0}
-                  onClick={() => confirm(group)}
-                >
-                  {group.confirmLabel ?? "确认选择"}
-                </button>
-              </div>
-            )}
           </div>
         );
       })}
+      {needsSubmit && (
+        <div className="choice-confirm-row choice-confirm-row--global">
+          <span className="choice-selected-text">
+            {selectedCount > 0 ? `已选 ${selectedCount} 项` : "请先选择"}
+          </span>
+          <button
+            className="button button-choice-confirm"
+            type="button"
+            disabled={disabled || selectedCount === 0}
+            onClick={confirmAll}
+          >
+            提交选择
+          </button>
+        </div>
+      )}
     </div>
   );
 }

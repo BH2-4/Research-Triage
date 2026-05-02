@@ -87,7 +87,7 @@ const PROFILING_INSTRUCTION = `你是「人人都能做科研」的科研启蒙�
 }
 
 可提取的字段名：
-- ageOrGeneration（年龄段/时代背景）
+- ageOrGeneration（代际标签，由你根据用户表达自由判断，例如 Z 世代、80 后、小学生、中年人等；不要强制归一到固定枚举）
 - educationLevel（教育水平）
 - toolAbility（工具使用能力）
 - aiFamiliarity（AI熟悉程度）

@@ -229,6 +229,7 @@ export async function POST(request: Request) {
               if (m) {
                 const labelMap: Record<string, keyof UserProfileState> = {
                   "年龄段": "ageOrGeneration",
+                  "代际": "ageOrGeneration",
                   "教育水平": "educationLevel",
                   "工具能力": "toolAbility",
                   "AI 熟悉度": "aiFamiliarity",
