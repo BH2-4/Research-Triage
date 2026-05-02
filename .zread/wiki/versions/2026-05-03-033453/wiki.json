@@ -1,0 +1,199 @@
+{
+  "id": "2026-05-03-033453",
+  "generated_at": "2026-05-02T19:34:53.412832Z",
+  "language": "zh",
+  "pages": [
+    {
+      "slug": "1-xiang-mu-gai-lan-rang-pu-tong-ren-zou-jin-ke-yan-si-wei",
+      "title": "项目概览：让普通人走进科研思维",
+      "file": "1-xiang-mu-gai-lan-rang-pu-tong-ren-zou-jin-ke-yan-si-wei.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "2-kuai-su-kai-shi-huan-jing-da-jian-yu-shou-ci-yun-xing",
+      "title": "快速开始：环境搭建与首次运行",
+      "file": "2-kuai-su-kai-shi-huan-jing-da-jian-yu-shou-ci-yun-xing.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "3-he-xin-dui-hua-bi-huan-cong-mo-hu-xiang-fa-dao-ke-zhi-xing-plan",
+      "title": "核心对话闭环：从模糊想法到可执行 Plan",
+      "file": "3-he-xin-dui-hua-bi-huan-cong-mo-hu-xiang-fa-dao-ke-zhi-xing-plan.md",
+      "section": "入门指南",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "4-zuo-ce-liao-tian-mian-ban-dui-hua-xuan-xiang-yu-zi-you-shu-ru",
+      "title": "左侧聊天面板：对话、选项与自由输入",
+      "file": "4-zuo-ce-liao-tian-mian-ban-dui-hua-xuan-xiang-yu-zi-you-shu-ru.md",
+      "section": "入门指南",
+      "group": "界面导览",
+      "level": "Beginner"
+    },
+    {
+      "slug": "5-you-ce-mian-ban-hua-xiang-plan-wen-jian-yu-li-shi-dui-bi",
+      "title": "右侧面板：画像、Plan、文件与历史对比",
+      "file": "5-you-ce-mian-ban-hua-xiang-plan-wen-jian-yu-li-shi-dui-bi.md",
+      "section": "入门指南",
+      "group": "界面导览",
+      "level": "Beginner"
+    },
+    {
+      "slug": "6-xi-tong-jia-gou-zong-lan-dan-ye-gong-zuo-tai-dan-api-ru-kou-userspace-wen-jian-chen-dian",
+      "title": "系统架构总览：单页工作台 + 单 API 入口 + userspace 文件沉淀",
+      "file": "6-xi-tong-jia-gou-zong-lan-dan-ye-gong-zuo-tai-dan-api-ru-kou-userspace-wen-jian-chen-dian.md",
+      "section": "架构与设计",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "7-dui-hua-jie-duan-zhuang-tai-ji-greeting-profiling-clarifying-planning-reviewing",
+      "title": "对话阶段状态机：greeting → profiling → clarifying → planning → reviewing",
+      "file": "7-dui-hua-jie-duan-zhuang-tai-ji-greeting-profiling-clarifying-planning-reviewing.md",
+      "section": "架构与设计",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "8-qian-duan-zhuang-tai-guan-li-sessionstorage-chi-jiu-hua-yu-che-xiao-ji-zhi",
+      "title": "前端状态管理：sessionStorage 持久化与撤销机制",
+      "file": "8-qian-duan-zhuang-tai-guan-li-sessionstorage-chi-jiu-hua-yu-che-xiao-ji-zhi.md",
+      "section": "架构与设计",
+      "level": "Advanced"
+    },
+    {
+      "slug": "9-ai-shu-chu-jie-xi-json-ti-qu-xie-yi-shi-bie-yu-markdown-dou-di",
+      "title": "AI 输出解析：JSON 提取、协议识别与 Markdown 兜底",
+      "file": "9-ai-shu-chu-jie-xi-json-ti-qu-xie-yi-shi-bie-yu-markdown-dou-di.md",
+      "section": "后端核心模块",
+      "group": "对话管线（chat-pipeline）",
+      "level": "Advanced"
+    },
+    {
+      "slug": "10-plan-chan-wu-sheng-cheng-wen-dang-xing-dong-qing-dan-ke-yan-lu-jing-yu-dai-ma-wen-jian",
+      "title": "Plan 产物生成：文档、行动清单、科研路径与代码文件",
+      "file": "10-plan-chan-wu-sheng-cheng-wen-dang-xing-dong-qing-dan-ke-yan-lu-jing-yu-dai-ma-wen-jian.md",
+      "section": "后端核心模块",
+      "group": "对话管线（chat-pipeline）",
+      "level": "Advanced"
+    },
+    {
+      "slug": "11-hua-xiang-zi-duan-yu-zhi-xin-du-mo-xing-10-zi-duan-x-san-ji-zhi-xin-du",
+      "title": "画像字段与置信度模型：10 字段 × 三级置信度",
+      "file": "11-hua-xiang-zi-duan-yu-zhi-xin-du-mo-xing-10-zi-duan-x-san-ji-zhi-xin-du.md",
+      "section": "后端核心模块",
+      "group": "用户画像与记忆（memory）",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "12-hua-xiang-jiu-xu-pan-ding-yu-fu-wu-zhong-qi-hui-fu",
+      "title": "画像就绪判定与服务重启恢复",
+      "file": "12-hua-xiang-jiu-xu-pan-ding-yu-fu-wu-zhong-qi-hui-fu.md",
+      "section": "后端核心模块",
+      "group": "用户画像与记忆（memory）",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "13-openai-jian-rong-jie-kou-yu-duo-provider-huan-jing-bian-liang-pei-zhi",
+      "title": "OpenAI 兼容接口与多 Provider 环境变量配置",
+      "file": "13-openai-jian-rong-jie-kou-yu-duo-provider-huan-jing-bian-liang-pei-zhi.md",
+      "section": "后端核心模块",
+      "group": "AI 调用层（ai-provider）",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "14-jie-duan-shi-prompt-she-ji-mei-ge-jie-duan-de-json-shu-chu-xie-yi",
+      "title": "阶段式 Prompt 设计：每个阶段的 JSON 输出协议",
+      "file": "14-jie-duan-shi-prompt-she-ji-mei-ge-jie-duan-de-json-shu-chu-xie-yi.md",
+      "section": "Prompt 工程与 Skills 体系",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "15-skills-jia-zai-ji-zhi-markdown-ji-neng-wen-jian-zhu-ru-xi-tong-prompt",
+      "title": "Skills 加载机制：Markdown 技能文件注入系统 Prompt",
+      "file": "15-skills-jia-zai-ji-zhi-markdown-ji-neng-wen-jian-zhu-ru-xi-tong-prompt.md",
+      "section": "Prompt 工程与 Skills 体系",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "16-he-xin-ke-xue-fang-fa-lun-qiang-zhi-wu-bu-liu-cheng-yu-tong-ji-shen-cha",
+      "title": "核心科学方法论：强制五步流程与同级审查",
+      "file": "16-he-xin-ke-xue-fang-fa-lun-qiang-zhi-wu-bu-liu-cheng-yu-tong-ji-shen-cha.md",
+      "section": "Prompt 工程与 Skills 体系",
+      "group": "十大科研方法论技能",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "17-wen-ti-chai-jie-jia-she-yan-zheng-yu-zheng-ju-fen-ji",
+      "title": "问题拆解、假设验证与证据分级",
+      "file": "17-wen-ti-chai-jie-jia-she-yan-zheng-yu-zheng-ju-fen-ji.md",
+      "section": "Prompt 工程与 Skills 体系",
+      "group": "十大科研方法论技能",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "18-mo-hu-dian-bao-lu-die-dai-xiu-zheng-yu-an-quan-bian-jie",
+      "title": "模糊点暴露、迭代修正与安全边界",
+      "file": "18-mo-hu-dian-bao-lu-die-dai-xiu-zheng-yu-an-quan-bian-jie.md",
+      "section": "Prompt 工程与 Skills 体系",
+      "group": "十大科研方法论技能",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "19-lei-xing-xi-tong-userprofilestate-planstate-codefileartifact-yu-filemanifest",
+      "title": "类型系统：UserProfileState、PlanState、CodeFileArtifact 与 FileManifest",
+      "file": "19-lei-xing-xi-tong-userprofilestate-planstate-codefileartifact-yu-filemanifest.md",
+      "section": "数据模型与存储",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "20-userspace-wen-jian-xi-tong-hui-hua-ge-chi-lu-jing-an-quan-xiao-yan-yu-wen-jian-qing-dan-guan-li",
+      "title": "userspace 文件系统：会话隔离、路径安全校验与文件清单管理",
+      "file": "20-userspace-wen-jian-xi-tong-hui-hua-ge-chi-lu-jing-an-quan-xiao-yan-yu-wen-jian-qing-dan-guan-li.md",
+      "section": "数据模型与存储",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "21-gui-ze-fen-zhen-yin-qing-triage-an-quan-jian-ce-yong-hu-fen-lei-yu-nan-du-ping-gu",
+      "title": "规则分诊引擎（triage）：安全检测、用户分类与难度评估",
+      "file": "21-gui-ze-fen-zhen-yin-qing-triage-an-quan-jian-ce-yong-hu-fen-lei-yu-nan-du-ping-gu.md",
+      "section": "数据模型与存储",
+      "level": "Advanced"
+    },
+    {
+      "slug": "22-post-api-chat-qing-qiu-xiang-ying-xie-yi-yu-jie-duan-tui-jin-luo-ji",
+      "title": "POST /api/chat：请求/响应协议与阶段推进逻辑",
+      "file": "22-post-api-chat-qing-qiu-xiang-ying-xie-yi-yu-jie-duan-tui-jin-luo-ji.md",
+      "section": "API 接口参考",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "23-get-api-userspace-wen-jian-qing-dan-wen-dang-yu-lan-yu-xi-tong-da-kai",
+      "title": "GET /api/userspace：文件清单、文档预览与系统打开",
+      "file": "23-get-api-userspace-wen-jian-qing-dan-wen-dang-yu-lan-yu-xi-tong-da-kai.md",
+      "section": "API 接口参考",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "24-ce-shi-ti-xi-vitest-qi-yue-ce-shi-fu-gai-guan-xian-userspace-yu-fen-zhen",
+      "title": "测试体系：Vitest 契约测试覆盖管线、userspace 与分诊",
+      "file": "24-ce-shi-ti-xi-vitest-qi-yue-ce-shi-fu-gai-guan-xian-userspace-yu-fen-zhen.md",
+      "section": "质量保障与扩展",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "25-ai-rong-cuo-she-ji-json-zhong-shi-gui-ze-dou-di-yu-xie-yi-xie-lou-fang-hu",
+      "title": "AI 容错设计：JSON 重试、规则兜底与协议泄漏防护",
+      "file": "25-ai-rong-cuo-she-ji-json-zhong-shi-gui-ze-dou-di-yu-xie-yi-xie-lou-fang-hu.md",
+      "section": "质量保障与扩展",
+      "level": "Advanced"
+    },
+    {
+      "slug": "26-hou-xu-kuo-zhan-fang-xiang-chi-jiu-hua-cun-chu-plan-ping-fen-yu-tu-pian-chan-wu",
+      "title": "后续扩展方向：持久化存储、Plan 评分与图片产物",
+      "file": "26-hou-xu-kuo-zhan-fang-xiang-chi-jiu-hua-cun-chu-plan-ping-fen-yu-tu-pian-chan-wu.md",
+      "section": "质量保障与扩展",
+      "level": "Advanced"
+    }
+  ]
+}
