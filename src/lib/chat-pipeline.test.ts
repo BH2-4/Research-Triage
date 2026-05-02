@@ -121,6 +121,55 @@ describe("chat pipeline contracts", () => {
     ]);
   });
 
+  it("splits legacy questions containing multiple prompts into submit-required choice groups", () => {
+    const groups = normalizeChoiceGroups(undefined, [
+      "目前最困扰你的是什么？",
+      "不知道从哪里开始学",
+      "不确定自己的MATLAB:基础够不够",
+      "不知道竞赛需要什么能力",
+      "我不太理解这些，帮我找方向",
+      "我不太理解这些，帮我找方向",
+      "你更习惯哪种讲解方式？",
+      "用大白话、类比日常事物",
+      "附带术语解释，适中详细",
+      "专业表达，直接给干货",
+      "我不太理解这些，你推荐一个",
+      "我不太理解这些，帮我找方向",
+    ]);
+
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toMatchObject({
+      mode: "single",
+      prompt: "目前最困扰你的是什么？",
+    });
+    expect(groups[1]).toMatchObject({
+      mode: "single",
+      prompt: "你更习惯哪种讲解方式？",
+    });
+    expect(groups[0].options.map((option) => option.value)).toEqual([
+      "不知道从哪里开始学",
+      "不确定自己的MATLAB:基础够不够",
+      "不知道竞赛需要什么能力",
+      "我不太理解这些，帮我找方向",
+    ]);
+    expect(groups[1].options.filter((option) => option.value.includes("帮我找方向"))).toHaveLength(1);
+  });
+
+  it("does not leak a single multi-select prompt into later single-select legacy groups", () => {
+    const groups = normalizeChoiceGroups(undefined, [
+      "你可以勾选已经具备的知识或技能（可多选）",
+      "高等数学（微积分）",
+      "线性代数",
+      "你更习惯哪种讲解方式？",
+      "用大白话、类比日常事物",
+      "专业表达，直接给干货",
+    ], "multiple");
+
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toMatchObject({ mode: "multiple" });
+    expect(groups[1]).toMatchObject({ mode: "single" });
+  });
+
   it("infers multiple choice mode for legacy questions when wording requires multiple selections", () => {
     const questions = ["AI 应用", "社会观察", "自然科学"];
     const mode = inferChoiceMode("你可以同时选择多个兴趣方向，选完后再提交。", questions);

@@ -148,7 +148,7 @@ OPENAI_API_KEY
       "options": [
         { "id": "a", "label": "按钮文案", "value": "提交给 AI 的语义" }
       ],
-      "confirmLabel": "提交选择"
+      "confirmLabel": "确认选择"
     }
   ],
   "profile": {},
@@ -168,8 +168,9 @@ greeting -> profiling -> clarifying -> planning -> reviewing
 
 - `questions` 是旧版兼容协议；`choiceGroups` 是当前结构化选择协议。
 - 单组选项为 `single` 时，点击即提交。
-- 单组 `multiple` 或多组选择同时出现时，用户先选择，再点击“提交选择”统一提交。
-- “我不太理解这些，帮我找方向”等逃逸选项与其它选项互斥。
+- 单组 `multiple` 或多组选择同时出现时，用户先选择，再点击“确认选择”统一提交。
+- 多组选项提交前要求每组至少选择一项；单个逃逸选项可直接确认。
+- “我不太理解这些，帮我找方向”等逃逸选项每组只保留一个，并与其它选项全局互斥。
 - 用户点击 Plan 面板中的“更简单 / 更专业 / 拆开讲 / 换方向”会回到 `/api/chat`，生成新版本 Plan。
 - AI 调用失败时返回 `_fallback: true` 和规则选项，不直接让主流程崩溃。
 

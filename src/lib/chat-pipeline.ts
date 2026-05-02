@@ -160,7 +160,7 @@ export function normalizeQuestions(raw: unknown): string[] {
       if (!isQuestionStemOnly(item)) return true;
       return !arr.some((candidate) => candidate !== item && candidate.startsWith(item.replace(/[？?]$/, "")));
     })
-    .slice(0, 6);
+    .slice(0, 18);
 }
 
 function isValidChoiceText(value: string): boolean {
@@ -189,10 +189,6 @@ function choiceIdFromText(text: string, index: number): string {
     .replace(/^[.-]+|[.-]+$/g, "")
     .slice(0, 40);
   return id || `option-${index + 1}`;
-}
-
-function normalizeChoiceMode(value: unknown): ChoiceMode {
-  return value === "multiple" ? "multiple" : "single";
 }
 
 export function inferChoiceMode(reply: string, questions: string[], explicitMode?: unknown): ChoiceMode {
@@ -244,6 +240,56 @@ function normalizeChoiceOptions(raw: unknown): ChoiceGroup["options"] {
   return options.slice(0, 8);
 }
 
+function isChoicePromptText(value: string): boolean {
+  const text = value.trim();
+  if (!text || isEscapeChoiceText(text)) return false;
+  if (/[？?]$/.test(text)) return true;
+  return /^(先|再|最后)?确认|^目前.*(什么|哪|哪个)|^你更|^你可以|^请(先)?(选择|勾选|确认)|可多选|多选/.test(text);
+}
+
+function fallbackChoiceSources(
+  questions: string[],
+  fallbackMode: ChoiceMode,
+): Array<Record<string, unknown>> {
+  if (questions.length === 0) return [];
+
+  const groups: Array<{ prompt?: string; options: string[] }> = [];
+  let current: { prompt?: string; options: string[] } | null = null;
+
+  for (const question of questions) {
+    if (isChoicePromptText(question)) {
+      if (current && current.options.length > 0) groups.push(current);
+      current = { prompt: question, options: [] };
+      continue;
+    }
+
+    if (!current) current = { options: [] };
+    current.options.push(question);
+  }
+
+  if (current && current.options.length > 0) groups.push(current);
+
+  if (groups.length === 0) {
+    return [{
+      id: "next-step",
+      mode: fallbackMode,
+      options: questions,
+    }];
+  }
+
+  return groups.map((group, index) => {
+    const groupMode = inferChoiceMode(group.prompt ?? "", group.options);
+    return {
+      id: `next-step-${index + 1}`,
+      mode: groupMode === "multiple" || (groups.length === 1 && fallbackMode === "multiple")
+        ? "multiple"
+        : "single",
+      prompt: group.prompt,
+      options: group.options,
+    };
+  });
+}
+
 function ensureEscapeChoice(options: ChoiceGroup["options"]): ChoiceGroup["options"] {
   const escapeText = "我不太理解这些，帮我找方向";
   const normalized: ChoiceGroup["options"] = [];
@@ -284,11 +330,7 @@ export function normalizeChoiceGroups(
   const source = Array.isArray(raw) && raw.length > 0
     ? raw
     : fallbackQuestions.length > 0
-      ? [{
-          id: "next-step",
-          mode: fallbackMode,
-          options: fallbackQuestions,
-        }]
+      ? fallbackChoiceSources(fallbackQuestions, fallbackMode)
       : [];
 
   const groups: ChoiceGroup[] = [];

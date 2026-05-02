@@ -258,7 +258,7 @@ src/lib/triage.test.ts
 |---|---|---|---|---|
 | 8.2 对话入口 | P0 | `src/app/page.tsx`, `ChatPanel`, `ChatInput` | 已完成 | 用户进入 `/` 后直接进入单页工作台，支持自然语言输入，不再使用旧表单流程。 |
 | 8.3 用户画像识别 | P0 | `memory.ts`, `/api/chat`, `side-panel.tsx` | 已完成，可增强 | 10 字段画像、置信度、画像就绪规则、前端画像展示均已存在；用户纠正目前通过自然语言回写，没有独立修正入口。 |
-| 8.4 多轮博弈引导 | P0 | 阶段机、`questions`, `ChoiceButtons`, `InlineInput` | P0 已完成，V1.1 多选待做 | 已支持主动追问、选项按钮、自由输入、Plan 调整；多选按钮属于 V1.1 P1 增量。 |
+| 8.4 多轮博弈引导 | P0 | 阶段机、`questions`, `choiceGroups`, `ChoiceButtons`, `InlineInput` | 已完成 | 已支持主动追问、单选、多选、多组选项、逃逸选项、自由输入、Plan 调整；V1.1 P1 结构化选择能力已沿原链路落地。 |
 | 8.5 Plan 生成与展示 | P0 | `PlanState`, `PlanPanel`, `chat-pipeline.ts` | 已完成 | Plan 有独立区域、折叠分区、步骤级调整按钮、版本号和 userspace 持久化。 |
 | 8.6 文档预览面板 | P0 | `FileList`, `DocPanel`, `/api/userspace` | 已完成，可增强 | Markdown 文档、代码文件、摘要、清单、科研路径可预览；修改项/删减项目前主要依赖 Plan 历史，不是专门 diff 视图。 |
 | 8.1 多端适配 | P0 | `globals.css` 响应式布局 | 基础完成 | 工作台在桌面/移动端可用，后续 P1 交互增强需要继续做移动端状态验证。 |
@@ -323,10 +323,12 @@ type ChoiceGroup = {
 
 兼容规则：
 
-- `questions: string[]` 继续保留，作为旧模型输出和 fallback 的单选渲染路径。
-- `/api/chat` 负责把 AI 输出中的 `choiceGroups` 归一化；如果没有 `choiceGroups`，继续按 `questions` 渲染。
-- 前端在 `ChoiceButtons` 内部升级为单选/多选组件，不改变 `ChatPanel` 和 `/api/chat` 的基本调用方向。
-- 多选确认后发送一条自然语言摘要，例如：`我选择了：A、B、C`，继续复用现有 `sendMessage`。
+- `questions: string[]` 继续保留，作为旧模型输出和 fallback 的兼容协议；服务端会将其归一化为 `choiceGroups`。
+- `/api/chat` 负责把 AI 输出中的 `choiceGroups` 或旧 `questions` 归一化，并去重每组逃逸选项。
+- 前端在 `ChoiceButtons` 内部统一处理单选/多选/多组选项，不改变 `ChatPanel` 和 `/api/chat` 的基本调用方向。
+- 单组单选点击即提交；单组多选或多组选项必须先选择，再点击“确认选择”提交。
+- 多组选项提交前要求每组至少选择一项；选择“我不太理解这些，帮我找方向”等逃逸选项时，该逃逸选项与所有其它组选项全局互斥。
+- 确认后发送一条自然语言摘要，例如：`我选择了：A、B、C`，继续复用现有 `sendMessage`。
 
 ### 11.2 图片与文档扩展
 

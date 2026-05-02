@@ -97,7 +97,7 @@ Phase 1-4 已整合为一个可运行的 MVP 主链路：
 |---|---|---|---|
 | 8.2 对话入口 | 已完成 | `src/app/page.tsx`, `ChatPanel`, `ChatInput` | `/` 直接进入对话工作台，旧页面只做兼容跳转。 |
 | 8.3 用户画像识别 | 已完成 | `memory.ts`, `/api/chat`, `side-panel.tsx` | 10 字段画像、置信度、画像就绪规则已落地；显式画像修正入口后续做 P1。 |
-| 8.4 多轮博弈引导 | P0 已完成 | 阶段机、`questions`, `ChoiceButtons`, `InlineInput` | 已支持主动追问、选项、自由输入、Plan 调整；V1.1 多选为 P1。 |
+| 8.4 多轮博弈引导 | 已完成 | 阶段机、`questions`, `choiceGroups`, `ChoiceButtons`, `InlineInput` | 已支持主动追问、单选、多选、多组选项、逃逸选项、自由输入、Plan 调整；V1.1 P1 结构化选择能力已沿原链路落地。 |
 | 8.5 Plan 生成与展示 | 已完成 | `PlanState`, `PlanPanel`, `chat-pipeline.ts` | 独立 Plan 区、折叠分组、步骤级调整、版本化保存已完成。 |
 | 8.6 文档预览面板 | 已完成 | `FileList`, `DocPanel`, `/api/userspace` | Markdown/代码/摘要/清单/科研路径可预览；专门 diff 视图后置。 |
 | 8.1 多端适配 | 基础完成 | `globals.css` | 桌面和移动端可用；P1 交互增强后需要再次做移动端回归。 |
@@ -106,7 +106,7 @@ Phase 1-4 已整合为一个可运行的 MVP 主链路：
 
 | PRD §8 P1 模块 | 当前基础 | 缺口 |
 |---|---|---|
-| 多级选择 | `normalizeQuestions`, `splitInlineSubOptions`, `ChoiceButtons` | 没有 `single/multiple` 协议、已选状态、取消选择、确认选择。 |
+| 多级选择 | `normalizeQuestions`, `normalizeChoiceGroups`, `splitInlineSubOptions`, `ChoiceButtons` | 已完成 `single/multiple` 协议、已选状态、取消选择、确认选择、逃逸选项互斥和旧 `questions` 兼容；后续只保留真实用户场景回归。 |
 | 图片 / 文档展示 | `marked`, `DocPanel`, `FileManifest.type = "image"` | Markdown 图片样式、失败兜底、外部图片元数据、图片产物保存策略不足。 |
 | Memory 机制 | `UserProfileMemory`, `profile.md`, session restore | 缺少 `progress.memory`, `preference.memory`, `prompt.state` 和关键记忆确认。 |
 | Skill / Prompt 动态引导 | `skills/*.md`, `skills.ts`, `chat-prompts.ts` | 目前全量注入 skills，缺少按画像/阶段选择 skill 的 selector。 |
@@ -123,7 +123,7 @@ Phase 5 的目标是实现 PRD V1.1 第 8 节的 P1 能力，同时保证原有�
 
 ### Phase 5.1：结构化选择协议
 
-目标：支持单选/多选/已选状态/确认选择，同时兼容现有 `questions: string[]`。
+目标：支持单选/多选/多组选项/已选状态/确认选择，同时兼容现有 `questions: string[]`。
 
 计划：
 
@@ -138,7 +138,9 @@ Phase 5 的目标是实现 PRD V1.1 第 8 节的 P1 能力，同时保证原有�
 
 - 旧流程不变。
 - 单选点击仍可直接进入下一轮。
-- 多选场景可选择、取消、确认，并能看到已选状态。
+- 单组多选场景可选择、取消、确认，并能看到已选状态。
+- 多组选项场景必须逐组选择后再通过“确认选择”提交。
+- 逃逸选项每组只保留一个，并与其它组选项全局互斥。
 
 ### Phase 5.2：对话内容层级和排版增强
 

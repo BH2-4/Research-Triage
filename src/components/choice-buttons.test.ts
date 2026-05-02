@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { choiceNeedsSubmit, nextChoiceSelection, nextChoiceState, selectedChoiceSummary } from "./choice-buttons";
+import { choiceNeedsSubmit, choiceSelectionReady, nextChoiceSelection, nextChoiceState, selectedChoiceSummary } from "./choice-buttons";
 import type { ChoiceGroup } from "../lib/triage-types";
 
 const group: ChoiceGroup = {
@@ -51,8 +51,10 @@ describe("nextChoiceSelection", () => {
     expect(choiceNeedsSubmit(groups)).toBe(true);
     const first = nextChoiceState(groups, {}, "path", "model");
     expect(first).toEqual({ path: ["model"] });
+    expect(choiceSelectionReady(groups, first)).toBe(false);
     const second = nextChoiceState(groups, first, "time", "short");
     expect(second).toEqual({ path: ["model"], time: ["short"] });
+    expect(choiceSelectionReady(groups, second)).toBe(true);
     expect(selectedChoiceSummary(groups, second)).toBe(
       "先确认路线：prefers model-first learning path\n再确认时间：30分钟以内",
     );
@@ -92,5 +94,30 @@ describe("nextChoiceSelection", () => {
     const selected = nextChoiceState(groups, { path: ["model"], time: ["short"] }, "path", "escape-path");
     expect(selected).toEqual({ path: ["escape-path"] });
     expect(nextChoiceState(groups, selected, "time", "short")).toEqual({ time: ["short"] });
+  });
+
+  it("allows one global escape selection to be confirmed without filling every group", () => {
+    const groups: ChoiceGroup[] = [
+      {
+        id: "path",
+        mode: "single",
+        options: [
+          { id: "model", label: "先按模型学", value: "先按模型学" },
+          { id: "escape-path", label: "我不太理解这些，帮我找方向", value: "我不太理解这些，帮我找方向" },
+        ],
+      },
+      {
+        id: "time",
+        mode: "single",
+        options: [
+          { id: "short", label: "30分钟以内", value: "30分钟以内" },
+          { id: "escape-time", label: "我不太理解这些，帮我找方向", value: "我不太理解这些，帮我找方向" },
+        ],
+      },
+    ];
+
+    const selected = nextChoiceState(groups, {}, "path", "escape-path");
+    expect(selected).toEqual({ path: ["escape-path"] });
+    expect(choiceSelectionReady(groups, selected)).toBe(true);
   });
 });

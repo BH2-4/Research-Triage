@@ -20,16 +20,27 @@ function isValidOption(q: string): boolean {
   return true;
 }
 
+function isEscapeOptionValue(value: string): boolean {
+  return value.includes("帮我找方向") ||
+    value.includes("自己描述") ||
+    value.includes("自定义") ||
+    value.includes("不太理解");
+}
+
 function legacyChoiceGroup(questions: string[]): ChoiceGroup[] {
   const valid = questions.filter(isValidOption);
-  const hasEscape = valid.some(
-    (q) =>
-      q.includes("帮我找方向") ||
-      q.includes("自己描述") ||
-      q.includes("自定义"),
-  );
-
-  const display = hasEscape ? valid : [...valid, "我不太理解这些，帮我找方向"];
+  const display: string[] = [];
+  let hasEscape = false;
+  for (const item of valid) {
+    if (isEscapeOptionValue(item)) {
+      if (hasEscape) continue;
+      display.push("我不太理解这些，帮我找方向");
+      hasEscape = true;
+    } else {
+      display.push(item);
+    }
+  }
+  if (!hasEscape) display.push("我不太理解这些，帮我找方向");
   if (display.length === 0) return [];
 
   return [{
@@ -53,14 +64,20 @@ function selectedSummary(group: ChoiceGroup, selectedIds: Set<string>): string {
   return `${prefix}${selected.join("、")}`;
 }
 
-function isEscapeOptionValue(value: string): boolean {
-  return value.includes("帮我找方向") ||
-    value.includes("自己描述") ||
-    value.includes("自定义") ||
-    value.includes("不太理解");
-}
-
 type ChoiceSelectionState = Record<string, string[]>;
+
+function initialChoiceState(groups: ChoiceGroup[]): ChoiceSelectionState {
+  const initial: ChoiceSelectionState = {};
+  for (const group of groups) {
+    const selectedIds = group.options
+      .filter((option) => option.selected === true)
+      .map((option) => option.id);
+    if (selectedIds.length > 0) {
+      initial[group.id] = group.mode === "multiple" ? selectedIds : selectedIds.slice(0, 1);
+    }
+  }
+  return initial;
+}
 
 export function nextChoiceSelection(
   group: ChoiceGroup,
@@ -139,16 +156,28 @@ export function selectedChoiceSummary(groups: ChoiceGroup[], selectedByGroup: Ch
     .join("\n");
 }
 
+export function choiceSelectionReady(groups: ChoiceGroup[], selectedByGroup: ChoiceSelectionState): boolean {
+  const selectedOptions = groups.flatMap((group) =>
+    group.options.filter((option) => (selectedByGroup[group.id] ?? []).includes(option.id)),
+  );
+  if (selectedOptions.length === 0) return false;
+  if (selectedOptions.some((option) => isEscapeOptionValue(option.value))) return selectedOptions.length === 1;
+  if (groups.length <= 1) return true;
+  return groups.every((group) => (selectedByGroup[group.id] ?? []).length > 0);
+}
+
 export function ChoiceButtons({ questions, choiceGroups, onSelect, disabled }: Props) {
   const groups = useMemo(
     () => (choiceGroups && choiceGroups.length > 0 ? choiceGroups : legacyChoiceGroup(questions)),
     [choiceGroups, questions],
   );
-  const [selectedByGroup, setSelectedByGroup] = useState<ChoiceSelectionState>({});
+  const [selectedByGroup, setSelectedByGroup] = useState<ChoiceSelectionState>(() => initialChoiceState(groups));
 
   if (groups.length === 0) return null;
 
   const needsSubmit = choiceNeedsSubmit(groups);
+  const selectionReady = choiceSelectionReady(groups, selectedByGroup);
+  const confirmLabel = groups.find((group) => group.confirmLabel)?.confirmLabel ?? "确认选择";
 
   const toggle = (group: ChoiceGroup, optionId: string) => {
     if (disabled) return;
@@ -157,7 +186,7 @@ export function ChoiceButtons({ questions, choiceGroups, onSelect, disabled }: P
 
   const confirmAll = () => {
     const summary = selectedChoiceSummary(groups, selectedByGroup);
-    if (!summary || disabled) return;
+    if (!summary || !selectionReady || disabled) return;
     onSelect(summary);
   };
 
@@ -172,7 +201,7 @@ export function ChoiceButtons({ questions, choiceGroups, onSelect, disabled }: P
             {group.prompt && <div className="choice-group-prompt">{group.prompt}</div>}
             <div className="choice-group-options">
               {group.options.map((option) => {
-                const selected = selectedIds.has(option.id) || option.selected === true;
+                const selected = selectedIds.has(option.id);
                 const isEscape = isEscapeOptionValue(option.value);
                 return (
                   <button
@@ -205,10 +234,10 @@ export function ChoiceButtons({ questions, choiceGroups, onSelect, disabled }: P
           <button
             className="button button-choice-confirm"
             type="button"
-            disabled={disabled || selectedCount === 0}
+            disabled={disabled || !selectionReady}
             onClick={confirmAll}
           >
-            提交选择
+            {confirmLabel}
           </button>
         </div>
       )}
