@@ -1,0 +1,212 @@
+{
+  "id": "2026-05-03-015434",
+  "generated_at": "2026-05-02T17:54:34.213479Z",
+  "language": "zh",
+  "pages": [
+    {
+      "slug": "1-xiang-mu-gai-shu-ke-yan-ke-ti-fen-zhen-tai-de-chan-pin-ding-wei-yu-he-xin-jie-zhi",
+      "title": "项目概述：科研课题分诊台的产品定位与核心价值",
+      "file": "1-xiang-mu-gai-shu-ke-yan-ke-ti-fen-zhen-tai-de-chan-pin-ding-wei-yu-he-xin-jie-zhi.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "2-kuai-su-qi-dong-huan-jing-da-jian-yi-lai-an-zhuang-yu-ben-di-yun-xing",
+      "title": "快速启动：环境搭建、依赖安装与本地运行",
+      "file": "2-kuai-su-qi-dong-huan-jing-da-jian-yi-lai-an-zhuang-yu-ben-di-yun-xing.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "3-xiang-mu-jie-gou-zong-lan-gen-mu-lu-jiu-guan-xian-yu-research-triage-yan-jin-guan-xi",
+      "title": "项目结构总览：根目录旧管线与 Research-Triage 演进关系",
+      "file": "3-xiang-mu-jie-gou-zong-lan-gen-mu-lu-jiu-guan-xian-yu-research-triage-yan-jin-guan-xi.md",
+      "section": "入门指南",
+      "level": "Beginner"
+    },
+    {
+      "slug": "4-huan-jing-bian-liang-pei-zhi-ai-provider-mi-yao-yu-mo-xing-xuan-ze",
+      "title": "环境变量配置：AI Provider 密钥与模型选择",
+      "file": "4-huan-jing-bian-liang-pei-zhi-ai-provider-mi-yao-yu-mo-xing-xuan-ze.md",
+      "section": "入门指南",
+      "group": "环境与配置",
+      "level": "Beginner"
+    },
+    {
+      "slug": "5-yan-zheng-yu-diao-shi-jiao-ben-deepseek-lian-tong-xing-ce-shi",
+      "title": "验证与调试脚本：DeepSeek 连通性测试",
+      "file": "5-yan-zheng-yu-diao-shi-jiao-ben-deepseek-lian-tong-xing-ce-shi.md",
+      "section": "入门指南",
+      "group": "环境与配置",
+      "level": "Beginner"
+    },
+    {
+      "slug": "6-zheng-ti-jia-gou-dan-ye-gong-zuo-tai-san-qu-bu-ju-yu-shu-ju-liu",
+      "title": "整体架构：单页工作台三区布局与数据流",
+      "file": "6-zheng-ti-jia-gou-dan-ye-gong-zuo-tai-san-qu-bu-ju-yu-shu-ju-liu.md",
+      "section": "深度解析",
+      "group": "架构设计",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "7-dui-hua-jie-duan-zhuang-tai-ji-greeting-profiling-clarifying-planning-reviewing",
+      "title": "对话阶段状态机：greeting → profiling → clarifying → planning → reviewing",
+      "file": "7-dui-hua-jie-duan-zhuang-tai-ji-greeting-profiling-clarifying-planning-reviewing.md",
+      "section": "深度解析",
+      "group": "架构设计",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "8-gen-xiang-mu-jiu-guan-xian-yu-xin-guan-xian-de-dui-bi-yu-qian-yi-lu-jing",
+      "title": "根项目旧管线与新管线的对比与迁移路径",
+      "file": "8-gen-xiang-mu-jiu-guan-xian-yu-xin-guan-xian-de-dui-bi-yu-qian-yi-lu-jing.md",
+      "section": "深度解析",
+      "group": "架构设计",
+      "level": "Advanced"
+    },
+    {
+      "slug": "9-api-chat-he-xin-duan-dian-qing-qiu-bian-pai-hui-hua-hui-fu-yu-jie-duan-tui-jin",
+      "title": "/api/chat 核心端点：请求编排、会话恢复与阶段推进",
+      "file": "9-api-chat-he-xin-duan-dian-qing-qiu-bian-pai-hui-hua-hui-fu-yu-jie-duan-tui-jin.md",
+      "section": "深度解析",
+      "group": "后端核心模块",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "10-ai-provider-gua-pei-ceng-luo-fetch-diao-yong-deepseek-api-de-she-ji-kao-liang",
+      "title": "AI Provider 适配层：裸 fetch 调用 DeepSeek API 的设计考量",
+      "file": "10-ai-provider-gua-pei-ceng-luo-fetch-diao-yong-deepseek-api-de-she-ji-kao-liang.md",
+      "section": "深度解析",
+      "group": "后端核心模块",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "11-yong-hu-hua-xiang-ji-yi-xi-tong-zhi-xin-du-qu-dong-de-bo-yi-shi-hua-xiang-que-li-ji-zhi",
+      "title": "用户画像记忆系统：置信度驱动的博弈式画像确立机制",
+      "file": "11-yong-hu-hua-xiang-ji-yi-xi-tong-zhi-xin-du-qu-dong-de-bo-yi-shi-hua-xiang-que-li-ji-zhi.md",
+      "section": "深度解析",
+      "group": "后端核心模块",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "12-chat-pipeline-ai-json-shu-chu-jie-xi-plan-gui-hua-yu-chan-wu-sheng-cheng",
+      "title": "Chat Pipeline：AI JSON 输出解析、Plan 归一化与产物生成",
+      "file": "12-chat-pipeline-ai-json-shu-chu-jie-xi-plan-gui-hua-yu-chan-wu-sheng-cheng.md",
+      "section": "深度解析",
+      "group": "后端核心模块",
+      "level": "Advanced"
+    },
+    {
+      "slug": "13-jie-duan-prompt-gong-cheng-yu-chat-prompts-jie-duan-zhi-ling-she-ji",
+      "title": "阶段 Prompt 工程与 chat-prompts 阶段指令设计",
+      "file": "13-jie-duan-prompt-gong-cheng-yu-chat-prompts-jie-duan-zhi-ling-she-ji.md",
+      "section": "深度解析",
+      "group": "后端核心模块",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "14-userspace-wen-jian-xi-tong-hui-hua-chan-wu-chi-jiu-hua-yu-ban-ben-guan-li",
+      "title": "Userspace 文件系统：会话产物持久化与版本管理",
+      "file": "14-userspace-wen-jian-xi-tong-hui-hua-chan-wu-chi-jiu-hua-yu-ban-ben-guan-li.md",
+      "section": "深度解析",
+      "group": "后端核心模块",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "15-gui-ze-fen-zhen-yin-qing-triage-ts-yong-hu-fen-lei-ren-wu-fen-lei-yu-feng-xian-ping-gu",
+      "title": "规则分诊引擎 triage.ts：用户分类、任务分类与风险评估",
+      "file": "15-gui-ze-fen-zhen-yin-qing-triage-ts-yong-hu-fen-lei-ren-wu-fen-lei-yu-feng-xian-ping-gu.md",
+      "section": "深度解析",
+      "group": "规则引擎与安全",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "16-an-quan-bian-jie-jian-ce-dai-xie-wei-zao-shi-bie-yu-he-gui-jiang-ji-lu-jing",
+      "title": "安全边界检测：代写/伪造识别与合规降级路径",
+      "file": "16-an-quan-bian-jie-jian-ce-dai-xie-wei-zao-shi-bie-yu-he-gui-jiang-ji-lu-jing.md",
+      "section": "深度解析",
+      "group": "规则引擎与安全",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "17-ai-diao-yong-shi-bai-de-jiang-ji-yu-rong-yu-ji-zhi",
+      "title": "AI 调用失败的降级与冗余机制",
+      "file": "17-ai-diao-yong-shi-bai-de-jiang-ji-yu-rong-yu-ji-zhi.md",
+      "section": "深度解析",
+      "group": "规则引擎与安全",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "18-chatpanel-yu-choicebuttons-jie-gou-hua-xuan-xiang-qu-dong-de-dui-hua-jiao-hu",
+      "title": "ChatPanel 与 ChoiceButtons：结构化选项驱动的对话交互",
+      "file": "18-chatpanel-yu-choicebuttons-jie-gou-hua-xuan-xiang-qu-dong-de-dui-hua-jiao-hu.md",
+      "section": "深度解析",
+      "group": "前端组件体系",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "19-sidepanel-hua-xiang-zhan-shi-plan-mian-ban-yu-wen-jian-yu-lan-de-you-ce-gong-zuo-qu",
+      "title": "SidePanel：画像展示、Plan 面板与文件预览的右侧工作区",
+      "file": "19-sidepanel-hua-xiang-zhan-shi-plan-mian-ban-yu-wen-jian-yu-lan-de-you-ce-gong-zuo-qu.md",
+      "section": "深度解析",
+      "group": "前端组件体系",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "20-plan-li-shi-dui-bi-yu-ban-ben-qie-huan-mian-ban",
+      "title": "Plan 历史对比与版本切换面板",
+      "file": "20-plan-li-shi-dui-bi-yu-ban-ben-qie-huan-mian-ban.md",
+      "section": "深度解析",
+      "group": "前端组件体系",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "21-qian-duan-hui-hua-chi-jiu-hua-sessionstorage-zhuang-tai-hui-fu-yu-kuai-zhao-ji-zhi",
+      "title": "前端会话持久化：sessionStorage 状态恢复与快照机制",
+      "file": "21-qian-duan-hui-hua-chi-jiu-hua-sessionstorage-zhuang-tai-hui-fu-yu-kuai-zhao-ji-zhi.md",
+      "section": "深度解析",
+      "group": "前端组件体系",
+      "level": "Beginner"
+    },
+    {
+      "slug": "22-he-xin-lei-xing-ding-yi-triage-types-ts-biao-dan-mei-ju-hua-xiang-zhuang-tai-plan-jie-gou-yu-api-xiang-ying",
+      "title": "核心类型定义 triage-types.ts：表单枚举、画像状态、Plan 结构与 API 响应",
+      "file": "22-he-xin-lei-xing-ding-yi-triage-types-ts-biao-dan-mei-ju-hua-xiang-zhuang-tai-plan-jie-gou-yu-api-xiang-ying.md",
+      "section": "深度解析",
+      "group": "类型系统与数据契约",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "23-api-qing-qiu-xiang-ying-qi-yue-yu-zod-xiao-yan-schema",
+      "title": "API 请求/响应契约与 Zod 校验 Schema",
+      "file": "23-api-qing-qiu-xiang-ying-qi-yue-yu-zod-xiao-yan-schema.md",
+      "section": "深度解析",
+      "group": "类型系统与数据契约",
+      "level": "Advanced"
+    },
+    {
+      "slug": "24-prompt-mo-ban-ti-xi-qi-jie-duan-fen-zhen-gong-zuo-liu-mo-ban-xiang-jie",
+      "title": "Prompt 模板体系：七阶段分诊工作流模板详解",
+      "file": "24-prompt-mo-ban-ti-xi-qi-jie-duan-fen-zhen-gong-zuo-liu-mo-ban-xiang-jie.md",
+      "section": "深度解析",
+      "group": "Prompt 模板与 Skills 体系",
+      "level": "Intermediate"
+    },
+    {
+      "slug": "25-skills-fang-fa-lun-zhu-ru-ji-zhi-ke-xue-fang-fa-lun-wu-bu-qiang-zhi-yue-shu-yu-jia-zai-ce-lue",
+      "title": "Skills 方法论注入机制：科学方法论五步强制约束与加载策略",
+      "file": "25-skills-fang-fa-lun-zhu-ru-ji-zhi-ke-xue-fang-fa-lun-wu-bu-qiang-zhi-yue-shu-yu-jia-zai-ce-lue.md",
+      "section": "深度解析",
+      "group": "Prompt 模板与 Skills 体系",
+      "level": "Advanced"
+    },
+    {
+      "slug": "26-ce-shi-ce-lue-vitest-qi-yue-ce-shi-pipeline-jie-xi-ce-shi-yu-userspace-ce-shi",
+      "title": "测试策略：Vitest 契约测试、Pipeline 解析测试与 Userspace 测试",
+      "file": "26-ce-shi-ce-lue-vitest-qi-yue-ce-shi-pipeline-jie-xi-ce-shi-yu-userspace-ce-shi.md",
+      "section": "深度解析",
+      "group": "测试与质量保障",
+      "level": "Intermediate"
+    }
+  ]
+}
