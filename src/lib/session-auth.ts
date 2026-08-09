@@ -3,6 +3,7 @@ import type { NextResponse } from "next/server";
 
 const SESSION_COOKIE = "triage_session";
 const SESSION_COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
+const MIN_SESSION_COOKIE_SECRET_LENGTH = 32;
 const SESSION_COOKIE_SECRET = process.env.SESSION_COOKIE_SECRET?.trim() || randomBytes(32).toString("hex");
 
 function signatureFor(payload: string): string {
@@ -57,7 +58,10 @@ export function hasSessionCookie(request: Request): boolean {
 }
 
 export function sessionAuthConfigured(): boolean {
-  return process.env.NODE_ENV !== "production" || Boolean(process.env.SESSION_COOKIE_SECRET?.trim());
+  if (process.env.NODE_ENV !== "production") return true;
+  const configured = process.env.SESSION_COOKIE_SECRET?.trim() ?? "";
+  return configured.length >= MIN_SESSION_COOKIE_SECRET_LENGTH
+    && configured !== "replace-with-a-random-32-byte-secret";
 }
 
 export function setSessionCookie<T extends NextResponse>(response: T, sessionId: string): T {

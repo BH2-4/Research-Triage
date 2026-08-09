@@ -1,8 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { POST } from "./route";
 import { POST as userspacePost } from "../userspace/[sessionId]/[[...filename]]/route";
 import { writeFile } from "../../../lib/userspace";
+
+beforeEach(() => {
+  vi.stubEnv("SESSION_COOKIE_SECRET", "a".repeat(64));
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("POST /api/chat request guards", () => {
   it("rejects oversized streamed request bodies", async () => {
@@ -48,6 +56,18 @@ describe("POST /api/chat request guards", () => {
     }));
 
     expect(response.status).toBe(401);
+  });
+
+  it("serializes first requests for one new session", async () => {
+    const sessionId = `concurrent-auth-${Date.now()}`;
+    const makeRequest = () => POST(new Request("http://localhost/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ message: "hello", sessionId }),
+    }));
+
+    const [first, second] = await Promise.all([makeRequest(), makeRequest()]);
+    expect([first.status, second.status].sort()).toEqual([200, 401]);
   });
 
   it("keeps the server-side system-open action disabled, including on localhost", async () => {

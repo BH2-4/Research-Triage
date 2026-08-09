@@ -69,6 +69,9 @@ const sessions = new Map<string, SessionState>();
 const MAX_SESSION_ENTRIES = 2_000;
 const MAX_SESSION_MESSAGES = 100;
 const MAX_AI_CALLS_PER_TURN = 3;
+const MAX_SESSION_IN_FLIGHT = 2;
+type SessionLockState = { tail: Promise<void>; count: number };
+const sessionLocks = new Map<string, SessionLockState>();
 
 const chatRequestSchema = z.object({
   message: z.string().trim().min(1).max(4000),
@@ -82,6 +85,32 @@ const RATE_LIMIT_MAX_REQUESTS = 20;
 const MAX_RATE_LIMIT_ENTRIES = 10_000;
 const MAX_REQUEST_BYTES = 64 * 1024;
 let lastRateLimitPruneAt = 0;
+
+async function acquireSessionLock(sessionId: string): Promise<(() => void) | null> {
+  const previousState = sessionLocks.get(sessionId);
+  if (previousState && previousState.count >= MAX_SESSION_IN_FLIGHT) return null;
+
+  const previous = previousState?.tail ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  sessionLocks.set(sessionId, {
+    tail: current,
+    count: (previousState?.count ?? 0) + 1,
+  });
+  await previous;
+  return () => {
+    release();
+    const latest = sessionLocks.get(sessionId);
+    if (!latest) return;
+    if (latest.tail === current) {
+      sessionLocks.delete(sessionId);
+    } else {
+      latest.count -= 1;
+    }
+  };
+}
 
 function sanitizeClientAddress(value: string | null): string | null {
   const candidate = value?.trim().replace(/^\[|\]$/g, "") ?? "";
@@ -324,6 +353,7 @@ function persistSessionState(sessionId: string, session: SessionState): void {
 // ─── Route handler ────────────────────────────────────────────────
 
 export async function POST(request: Request) {
+  let releaseSessionLock: (() => void) | undefined;
   try {
     const bodyResult = await readJsonBody(request);
     if (!bodyResult.ok) {
@@ -355,6 +385,28 @@ export async function POST(request: Request) {
         { error: "请求过于频繁，请稍后再试" },
         { status: 429, headers: { "Retry-After": String(retryAfter) } },
       );
+    }
+
+    // Serialize turns for one session so concurrent tabs cannot interleave
+    // mutable memory, phase transitions, or generated plans. Keep the queue
+    // short so a burst cannot hold requests behind a slow upstream forever.
+    const acquiredSessionLock = await acquireSessionLock(sessionId);
+    if (!acquiredSessionLock) {
+      return NextResponse.json(
+        { error: "该会话正在处理其他请求，请稍后再试" },
+        { status: 429, headers: { "Retry-After": "1" } },
+      );
+    }
+    releaseSessionLock = acquiredSessionLock;
+
+    // Another request may have created this session while this request waited
+    // for the lock. Re-check ownership after acquiring it.
+    const lockedKnownSession = sessions.has(sessionId)
+      || getManifest(sessionId).length > 0
+      || readSessionState(sessionId) !== null;
+    const lockedValidSessionCookie = hasValidSessionCookie(request, sessionId);
+    if (lockedKnownSession && !lockedValidSessionCookie) {
+      return NextResponse.json({ error: "会话已失效，请刷新页面后重试" }, { status: 401 });
     }
 
     // Get or create session (with disk recovery)
@@ -861,5 +913,7 @@ export async function POST(request: Request) {
     const cause = err instanceof Error && err.cause ? ` cause=${String(err.cause)}` : "";
     console.error(`[api/chat] ${msg}${cause}`);
     return NextResponse.json({ error: "服务暂时不可用，请稍后再试" }, { status: 500 });
+  } finally {
+    releaseSessionLock?.();
   }
 }

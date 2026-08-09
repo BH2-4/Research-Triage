@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextResponse } from "next/server";
 
-import { hasValidSessionCookie, setSessionCookie } from "./session-auth";
+import { hasValidSessionCookie, sessionAuthConfigured, setSessionCookie } from "./session-auth";
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
 });
 
 describe("session ownership cookie", () => {
@@ -48,5 +49,17 @@ describe("session ownership cookie", () => {
     });
 
     expect(hasValidSessionCookie(request, sessionId)).toBe(false);
+  });
+
+  it("requires a high-entropy production secret instead of accepting the example placeholder", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("SESSION_COOKIE_SECRET", "replace-with-a-random-32-byte-secret");
+    expect(sessionAuthConfigured()).toBe(false);
+
+    vi.stubEnv("SESSION_COOKIE_SECRET", "short-secret");
+    expect(sessionAuthConfigured()).toBe(false);
+
+    vi.stubEnv("SESSION_COOKIE_SECRET", "a".repeat(64));
+    expect(sessionAuthConfigured()).toBe(true);
   });
 });
