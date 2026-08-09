@@ -134,7 +134,7 @@ Sources: [.env.example](Research-Triage/.env.example#L10-L35)
 ```env
 # 修改前（DeepSeek）
 AI_BASE_URL=https://api.deepseek.com/v1
-AI_API_KEY=sk-c2dff935c6c74f80912b421d8b452006
+AI_API_KEY=sk-your-deepseek-key
 AI_MODEL=deepseek-v4-flash
 
 # 修改后（Moonshot）

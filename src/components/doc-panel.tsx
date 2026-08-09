@@ -21,7 +21,6 @@ type Props = {
 export function DocPanel({ sessionId, activeFile, onClose }: Props) {
   const [doc, setDoc] = useState<DocData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [opening, setOpening] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
@@ -33,7 +32,6 @@ export function DocPanel({ sessionId, activeFile, onClose }: Props) {
 
     let cancelled = false;
     setLoading(true);
-    setOpening(false);
     setImageFailed(false);
 
     fetch(`/api/userspace/${encodeURIComponent(sessionId)}/${encodeURIComponent(activeFile)}`)
@@ -102,32 +100,11 @@ export function DocPanel({ sessionId, activeFile, onClose }: Props) {
   const fileUrl = `/api/userspace/${encodedSession}/${encodedFile}`;
   const rawUrl = `${fileUrl}?raw=1`;
 
-  async function openWithSystemDefault() {
-    setOpening(true);
-    try {
-      const resp = await fetch(`${fileUrl}?action=open`, { method: "POST" });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    } catch {
-      window.alert("系统打开失败，请使用“打开”或“下载”。");
-    } finally {
-      setOpening(false);
-    }
-  }
-
   return (
     <div className="panel doc-panel" style={{ marginTop: "1rem" }}>
       <div className="doc-header">
         <span className="eyebrow">文档预览</span>
         <div className="doc-actions">
-          <button
-            className="doc-action-link doc-action-button"
-            type="button"
-            onClick={openWithSystemDefault}
-            disabled={opening}
-            title="用系统默认应用打开"
-          >
-            {opening ? "打开中" : "系统打开"}
-          </button>
           <a className="doc-action-link" href={rawUrl} target="_blank" rel="noreferrer">
             打开
           </a>

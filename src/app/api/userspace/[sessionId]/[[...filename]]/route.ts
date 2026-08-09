@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getManifest, openFileWithSystemDefault, readFile } from "../../../../../lib/userspace";
+import { hasValidSessionCookie, sessionAuthConfigured } from "../../../../../lib/session-auth";
+import { getManifest, readFile } from "../../../../../lib/userspace";
 
 /**
  * GET /api/userspace/{sessionId}
@@ -16,10 +17,16 @@ export async function GET(
   if (!sessionId) {
     return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
   }
+  if (!sessionAuthConfigured() || !hasValidSessionCookie(request, sessionId)) {
+    return NextResponse.json({ error: "File not found" }, { status: 404 });
+  }
 
   try {
     if (!resolvedFilename) {
-      return NextResponse.json({ files: getManifest(sessionId) });
+      return NextResponse.json(
+        { files: getManifest(sessionId) },
+        { headers: { "Cache-Control": "no-store" } },
+      );
     }
 
     const content = readFile(sessionId, resolvedFilename);
@@ -33,6 +40,7 @@ export async function GET(
     if (raw) {
       return new Response(content, {
         headers: {
+          "Cache-Control": "no-store",
           "Content-Type": meta?.type === "code"
             ? "text/plain; charset=utf-8"
             : meta?.type === "image"
@@ -43,15 +51,18 @@ export async function GET(
       });
     }
 
-    return NextResponse.json({
-      filename: resolvedFilename,
-      title: meta?.title ?? resolvedFilename.replace(/\.md$/, ""),
-      content,
-      type: meta?.type ?? "summary",
-      version: meta?.version ?? 1,
-      language: meta?.language,
-      createdAt: meta?.createdAt ?? new Date().toISOString(),
-    });
+    return NextResponse.json(
+      {
+        filename: resolvedFilename,
+        title: meta?.title ?? resolvedFilename.replace(/\.md$/, ""),
+        content,
+        type: meta?.type ?? "summary",
+        version: meta?.version ?? 1,
+        language: meta?.language,
+        createdAt: meta?.createdAt ?? new Date().toISOString(),
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Invalid request";
     return NextResponse.json({ error: message }, { status: 400 });
@@ -59,31 +70,11 @@ export async function GET(
 }
 
 export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ sessionId: string; filename?: string[] }> },
+  _request: Request,
+  _context: { params: Promise<{ sessionId: string; filename?: string[] }> },
 ) {
-  const { sessionId, filename } = await params;
-  const resolvedFilename = filename?.join("/");
-  const action = new URL(request.url).searchParams.get("action");
-
-  if (!sessionId || !resolvedFilename) {
-    return NextResponse.json({ error: "Missing sessionId or filename" }, { status: 400 });
-  }
-  if (action !== "open") {
-    return NextResponse.json({ error: "Unsupported action" }, { status: 400 });
-  }
-
-  try {
-    const result = openFileWithSystemDefault(sessionId, resolvedFilename);
-    if (!result.ok) {
-      return NextResponse.json(
-        { error: result.message },
-        { status: result.message === "File not found" ? 404 : 500 },
-      );
-    }
-    return NextResponse.json({ ok: true, message: result.message });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Invalid request";
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
+  // Opening a file with the server's operating-system default application is
+  // intentionally unavailable. A public web server must never expose a
+  // process-launching endpoint; users can preview or download files instead.
+  return NextResponse.json({ error: "System open is disabled for this deployment" }, { status: 404 });
 }

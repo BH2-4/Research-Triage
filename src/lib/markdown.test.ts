@@ -19,5 +19,18 @@ describe("renderMarkdown", () => {
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;script&gt;");
   });
-});
 
+  it("rejects protocol-relative links", () => {
+    const html = renderMarkdown("[external](//evil.example/path)");
+
+    expect(html).not.toContain('href="//evil.example/path"');
+    expect(html).toContain("external");
+  });
+
+  it("rejects backslash paths that browsers could normalize to an external host", () => {
+    const html = renderMarkdown("[external](/\\\\evil.example/path)");
+
+    expect(html).not.toContain('href="/\\\\evil.example/path"');
+    expect(html).toContain("external");
+  });
+});

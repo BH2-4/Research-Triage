@@ -1,9 +1,79 @@
-import { execFileSync, spawn } from "child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "fs";
 import path from "path";
 import type { FileManifest, ImageArtifact, PersistedSessionState } from "./triage-types";
 
 const BASE = path.join(process.cwd(), "userspace");
+const MAX_SESSION_FILES = 64;
+const MAX_FILE_BYTES = 256 * 1024;
+const MAX_SESSION_BYTES = 4 * 1024 * 1024;
+const MAX_GLOBAL_SESSION_ENTRIES = 10_000;
+const MAX_GLOBAL_BYTES = 256 * 1024 * 1024;
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+let lastPruneAt = 0;
+
+function pruneExpiredSessions(): void {
+  const now = Date.now();
+  if (now - lastPruneAt < 60_000 || !existsSync(BASE)) return;
+  lastPruneAt = now;
+
+  for (const entry of readdirSync(BASE, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const sessionDir = path.join(BASE, entry.name);
+    try {
+      let lastModified = statSync(sessionDir).mtimeMs;
+      for (const filename of readdirSync(sessionDir)) {
+        try {
+          lastModified = Math.max(lastModified, statSync(path.join(sessionDir, filename)).mtimeMs);
+        } catch {
+          // Ignore files that disappear while pruning.
+        }
+      }
+      if (now - lastModified > SESSION_TTL_MS) {
+        rmSync(sessionDir, { recursive: true, force: true });
+      }
+    } catch {
+      // A concurrent request may remove or replace a session directory.
+    }
+  }
+}
+
+function sessionUsage(sessionDir: string): { files: number; bytes: number } {
+  if (!existsSync(sessionDir)) return { files: 0, bytes: 0 };
+  let files = 0;
+  let bytes = 0;
+  for (const filename of readdirSync(sessionDir)) {
+    try {
+      const info = statSync(path.join(sessionDir, filename));
+      if (info.isFile()) {
+        files += 1;
+        bytes += info.size;
+      }
+    } catch {
+      // Ignore files that disappear while calculating the quota.
+    }
+  }
+  return { files, bytes };
+}
+
+function globalUsage(): { sessions: number; bytes: number } {
+  if (!existsSync(BASE)) return { sessions: 0, bytes: 0 };
+  let sessions = 0;
+  let bytes = 0;
+  for (const entry of readdirSync(BASE, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    sessions += 1;
+    bytes += sessionUsage(path.join(BASE, entry.name)).bytes;
+  }
+  return { sessions, bytes };
+}
 
 function assertSafeSegment(value: string, label: string): void {
   if (!/^[a-zA-Z0-9_.-]+$/.test(value) || value.includes("..")) {
@@ -11,18 +81,18 @@ function assertSafeSegment(value: string, label: string): void {
   }
 }
 
-function dir(sessionId: string): string {
+function dir(sessionId: string, create = true): string {
   assertSafeSegment(sessionId, "sessionId");
   const d = path.join(BASE, sessionId);
-  if (!existsSync(d)) mkdirSync(d, { recursive: true });
+  if (create && !existsSync(d)) mkdirSync(d, { recursive: true });
   return d;
 }
 
-function filePath(sessionId: string, filename: string): string {
+function filePath(sessionId: string, filename: string, create = true): string {
   assertSafeSegment(filename, "filename");
-  const fullPath = path.join(dir(sessionId), filename);
+  const fullPath = path.join(dir(sessionId, create), filename);
   const resolved = path.resolve(fullPath);
-  const root = path.resolve(dir(sessionId));
+  const root = path.resolve(dir(sessionId, false));
   if (!resolved.startsWith(`${root}${path.sep}`)) {
     throw new Error("Invalid filename");
   }
@@ -35,7 +105,30 @@ export function writeFile(
   filename: string,
   content: string,
 ): string {
+  pruneExpiredSessions();
   const fullPath = filePath(sessionId, filename);
+  const contentBytes = Buffer.byteLength(content, "utf8");
+  if (contentBytes > MAX_FILE_BYTES) {
+    throw new Error("File exceeds the per-file userspace limit");
+  }
+
+  const sessionDir = dir(sessionId, false);
+  const existingBytes = existsSync(fullPath) ? statSync(fullPath).size : 0;
+  const usage = sessionUsage(sessionDir);
+  const global = globalUsage();
+  if (global.sessions > MAX_GLOBAL_SESSION_ENTRIES) {
+    throw new Error("Userspace exceeds the global session limit");
+  }
+  if (global.bytes - existingBytes + contentBytes > MAX_GLOBAL_BYTES) {
+    throw new Error("Userspace exceeds the global storage limit");
+  }
+  if (!existsSync(fullPath) && usage.files >= MAX_SESSION_FILES) {
+    throw new Error("Session exceeds the userspace file limit");
+  }
+  if (usage.bytes - existingBytes + contentBytes > MAX_SESSION_BYTES) {
+    throw new Error("Session exceeds the userspace storage limit");
+  }
+
   writeFileSync(fullPath, content, "utf-8");
   return fullPath;
 }
@@ -45,7 +138,8 @@ export function readFile(
   sessionId: string,
   filename: string,
 ): string | null {
-  const fullPath = filePath(sessionId, filename);
+  pruneExpiredSessions();
+  const fullPath = filePath(sessionId, filename, false);
   if (!existsSync(fullPath)) return null;
   return readFileSync(fullPath, "utf-8");
 }
@@ -54,59 +148,8 @@ export function getExistingFilePath(
   sessionId: string,
   filename: string,
 ): string | null {
-  const fullPath = filePath(sessionId, filename);
+  const fullPath = filePath(sessionId, filename, false);
   return existsSync(fullPath) ? fullPath : null;
-}
-
-function isWsl(): boolean {
-  return process.platform === "linux" && Boolean(process.env.WSL_DISTRO_NAME);
-}
-
-function openDetached(command: string, args: string[]): void {
-  const child = spawn(command, args, {
-    detached: true,
-    stdio: "ignore",
-  });
-  child.on("error", () => { /* opening is best-effort */ });
-  child.unref();
-}
-
-export function openFileWithSystemDefault(
-  sessionId: string,
-  filename: string,
-): { ok: boolean; message: string } {
-  const fullPath = getExistingFilePath(sessionId, filename);
-  if (!fullPath) {
-    return { ok: false, message: "File not found" };
-  }
-
-  try {
-    if (process.platform === "win32") {
-      openDetached("cmd.exe", ["/c", "start", "", fullPath]);
-      return { ok: true, message: "Opened with system default app" };
-    }
-
-    if (process.platform === "darwin") {
-      openDetached("open", [fullPath]);
-      return { ok: true, message: "Opened with system default app" };
-    }
-
-    if (isWsl()) {
-      const windowsPath = execFileSync("wslpath", ["-w", fullPath], {
-        encoding: "utf-8",
-      }).trim();
-      openDetached("cmd.exe", ["/c", "start", "", windowsPath]);
-      return { ok: true, message: "Opened with system default app" };
-    }
-
-    openDetached("xdg-open", [fullPath]);
-    return { ok: true, message: "Opened with system default app" };
-  } catch (err) {
-    return {
-      ok: false,
-      message: err instanceof Error ? err.message : "Failed to open file",
-    };
-  }
 }
 
 /** Get the manifest for a session, creating it if it does not exist. */
@@ -146,7 +189,9 @@ export function upsertManifest(
 
 /** List all .md files in a session (excludes manifest.json). */
 export function listFiles(sessionId: string): string[] {
-  const d = dir(sessionId);
+  pruneExpiredSessions();
+  const d = dir(sessionId, false);
+  if (!existsSync(d)) return [];
   return readdirSync(d).filter(
     (f) => f.endsWith(".md") && f !== "manifest.json",
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { marked } from "marked";
+import { renderMarkdown } from "../lib/markdown";
 
 type Props = {
   process: string;
@@ -25,7 +25,7 @@ export function ProcessPanel({ process }: Props) {
       {open && (
         <div
           className="process-content"
-          dangerouslySetInnerHTML={{ __html: marked.parse(process) }}
+          dangerouslySetInnerHTML={{ __html: renderMarkdown(process) }}
         />
       )}
     </div>

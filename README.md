@@ -61,7 +61,7 @@ src/
     route-plan/page.tsx              # 兼容跳转到 /
     api/
       chat/route.ts                  # 主对话、画像、收敛、Plan、Review
-      userspace/[sessionId]/[[...filename]]/route.ts # 文件清单、预览、原文、系统打开
+      userspace/[sessionId]/[[...filename]]/route.ts # 文件清单、预览、原文
 
   components/
     chat-panel.tsx
@@ -111,6 +111,8 @@ AI Provider 读取以下变量，优先级从上到下：
 AI_BASE_URL
 AI_API_KEY
 AI_MODEL
+AI_REQUEST_TIMEOUT_MS
+SESSION_COOKIE_SECRET
 
 DEEPSEEK_BASE_URL
 DEEPSEEK_API_KEY
@@ -130,7 +132,7 @@ OPENAI_API_KEY
 ```json
 {
   "message": "我想研究AI怎么帮助中学生学习物理",
-  "sessionId": "client-generated-id"
+  "sessionId": "client-generated-id-1234"
 }
 ```
 
@@ -184,7 +186,9 @@ greeting -> profiling -> clarifying -> planning -> reviewing
 
 `GET /api/userspace/{sessionId}/{filename}?raw=1` 返回原始文本，可在新标签页打开或下载。
 
-`POST /api/userspace/{sessionId}/{filename}?action=open` 在本地开发环境中尝试用系统默认应用打开文件。
+`POST /api/userspace/{sessionId}/{filename}?action=open` 固定返回 404。公开部署不提供服务器端系统打开能力，用户应使用浏览器预览或下载。
+
+userspace 文件读取需要服务端签发的 HttpOnly `triage_session` Cookie。生产环境必须设置高熵 `SESSION_COOKIE_SECRET`；不要把它放入 `NEXT_PUBLIC_*` 或浏览器代码。
 
 ## userspace
 
@@ -257,7 +261,7 @@ npm run build
 ```bash
 curl -X POST http://localhost:3010/api/chat \
   -H "Content-Type: application/json" \
-  -d '{"message":"我想研究AI怎么帮助中学生学习物理","sessionId":"smoke-chat"}'
+  -d '{"message":"我想研究AI怎么帮助中学生学习物理","sessionId":"smoke-session-0001"}'
 ```
 
 ## 后续扩展方向

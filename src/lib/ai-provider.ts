@@ -29,11 +29,17 @@ const API_KEY =
   "";
 
 export const DEFAULT_MODEL = process.env.AI_MODEL || "deepseek-v4-flash";
+const AI_REQUEST_TIMEOUT_MS = Math.min(
+  Math.max(Number(process.env.AI_REQUEST_TIMEOUT_MS) || 45_000, 1_000),
+  120_000,
+);
+const MAX_AI_RESPONSE_CHARS = 32_000;
+const MAX_AI_RESPONSE_BYTES = 128 * 1024;
 
 export type ChatRole = "system" | "user" | "assistant";
 export type ChatMsg = { role: ChatRole; content: string };
 
-interface ChatOptions {
+export interface ChatOptions {
   model?: string;
   temperature?: number;
   maxTokens?: number;
@@ -47,6 +53,44 @@ interface ChatOptions {
 
 export interface ChatResult {
   content: string;
+}
+
+async function readLimitedText(response: Response, maxBytes: number): Promise<string> {
+  const contentLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    throw new Error("AI response exceeded the configured size limit");
+  }
+
+  if (!response.body) {
+    return response.text();
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new Error("AI response exceeded the configured size limit");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(body);
 }
 
 export async function chat(opts: ChatOptions): Promise<ChatResult> {
@@ -77,40 +121,52 @@ export async function chat(opts: ChatOptions): Promise<ChatResult> {
     `[chat] start${traceLabel} model=${body.model} msgs=${messages.length} maxTokens=${body.max_tokens ?? "-"} key=${API_KEY ? "yes" : "missing"}`,
   );
 
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${API_KEY}`,
-    },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), AI_REQUEST_TIMEOUT_MS);
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${API_KEY}`,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    if (!resp.ok) {
+      const errText = await readLimitedText(resp, 16 * 1024).catch(() => "");
+      console.warn(
+        `[chat] failed${traceLabel} status=${resp.status} latencyMs=${Date.now() - startedAt}`,
+      );
+      throw new Error(
+        `API ${resp.status} ${resp.statusText}: ${errText.slice(0, 300)}`,
+      );
+    }
 
-  if (!resp.ok) {
-    const errText = await resp.text().catch(() => "");
-    console.warn(
-      `[chat] failed${traceLabel} status=${resp.status} latencyMs=${Date.now() - startedAt}`,
+    const raw = await readLimitedText(resp, MAX_AI_RESPONSE_BYTES);
+    const json = JSON.parse(raw) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const msg = json.choices?.[0]?.message;
+    const content = msg?.content;
+    if (!content) {
+      throw new Error(`API returned empty content. Raw: ${raw.slice(0, 300)}`);
+    }
+    if (content.length > MAX_AI_RESPONSE_CHARS) {
+      throw new Error("AI response exceeded the configured size limit");
+    }
+
+    console.log(
+      `[chat] success${traceLabel} latencyMs=${Date.now() - startedAt} contentChars=${content.length}`,
     );
-    throw new Error(
-      `API ${resp.status} ${resp.statusText}: ${errText.slice(0, 300)}`,
-    );
+
+    return { content };
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new Error(`AI request timed out after ${AI_REQUEST_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  const json = (await resp.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-
-  const msg = json.choices?.[0]?.message;
-  const content = msg?.content;
-  if (!content) {
-    throw new Error(
-      `API returned empty content. Raw: ${JSON.stringify(json).slice(0, 300)}`,
-    );
-  }
-
-  console.log(
-    `[chat] success${traceLabel} latencyMs=${Date.now() - startedAt} contentChars=${content.length}`,
-  );
-
-  return { content };
 }

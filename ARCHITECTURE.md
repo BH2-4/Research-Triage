@@ -67,7 +67,6 @@ ChatPage (/)
 POST /api/chat
 GET  /api/userspace/{sessionId}
 GET  /api/userspace/{sessionId}/{filename}
-POST /api/userspace/{sessionId}/{filename}?action=open
 ```
 
 ### 4.1 `/api/chat`
@@ -111,7 +110,7 @@ greeting
 
 返回指定文件内容。`?raw=1` 返回原始文本，供浏览器直接打开或下载。
 
-同一路由支持 `POST ?action=open`，在本地开发环境中通过系统默认应用打开文件。该能力仍复用 `userspace.ts` 的路径校验，不新增业务管线。
+服务端不提供系统默认应用打开能力，避免公开 HTTP 请求触发服务器进程；用户通过浏览器预览或下载 userspace 文件。
 
 ## 5. 数据模型
 

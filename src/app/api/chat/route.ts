@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { chat, type ChatMsg } from "../../../lib/ai-provider";
 import {
@@ -25,6 +26,12 @@ import {
   PLANNING_INSTRUCTION,
 } from "../../../lib/chat-prompts";
 import { selectSkills } from "../../../lib/skills";
+import {
+  hasSessionCookie,
+  hasValidSessionCookie,
+  sessionAuthConfigured,
+  setSessionCookie,
+} from "../../../lib/session-auth";
 import {
   createEmptyProfile,
   getDetectedFields,
@@ -60,6 +67,138 @@ type SessionState = {
 };
 
 const sessions = new Map<string, SessionState>();
+const MAX_SESSION_ENTRIES = 2_000;
+const MAX_SESSION_MESSAGES = 100;
+const MAX_AI_CALLS_PER_TURN = 3;
+
+const chatRequestSchema = z.object({
+  message: z.string().trim().min(1).max(4000),
+  sessionId: z.string().regex(/^[a-zA-Z0-9_-]{16,128}$/),
+});
+
+type RateLimitEntry = { windowStartedAt: number; count: number };
+const chatRateLimits = new Map<string, RateLimitEntry>();
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_REQUESTS = 20;
+const MAX_RATE_LIMIT_ENTRIES = 10_000;
+const MAX_REQUEST_BYTES = 64 * 1024;
+let lastRateLimitPruneAt = 0;
+
+function sanitizeClientAddress(value: string | null): string | null {
+  const candidate = value?.trim().replace(/^\[|\]$/g, "") ?? "";
+  if (!candidate || candidate.length > 64 || !/^[a-fA-F0-9:.]+$/.test(candidate)) return null;
+  return candidate;
+}
+
+function getRateLimitKey(request: Request): string {
+  // Forwarded identity is only usable when the deployment guarantees that a
+  // trusted proxy strips client-supplied forwarding headers. Keep this opt-in;
+  // DNS/Cloudflare proxying alone does not protect a directly reachable origin.
+  if (process.env.TRUST_PROXY_HEADERS === "true") {
+    const cloudflareIp = sanitizeClientAddress(request.headers.get("cf-connecting-ip"));
+    if (cloudflareIp && request.headers.get("cf-ray")) return `ip:${cloudflareIp}`;
+
+    const forwarded = request.headers.get("x-forwarded-for")?.split(",").reverse();
+    const forwardedIp = forwarded
+      ?.map((value) => sanitizeClientAddress(value))
+      .find((value): value is string => Boolean(value));
+    if (forwardedIp) return `ip:${forwardedIp}`;
+
+    const realIp = sanitizeClientAddress(request.headers.get("x-real-ip"));
+    if (realIp) return `ip:${realIp}`;
+  }
+
+  return "origin";
+}
+
+function appendSessionMessage(session: SessionState, message: ChatMessage): void {
+  session.messages.push(message);
+  if (session.messages.length > MAX_SESSION_MESSAGES) {
+    session.messages.splice(0, session.messages.length - MAX_SESSION_MESSAGES);
+  }
+}
+
+function rememberSession(sessionId: string, session: SessionState): void {
+  if (sessions.has(sessionId)) sessions.delete(sessionId);
+  if (sessions.size >= MAX_SESSION_ENTRIES) {
+    const oldest = sessions.keys().next().value;
+    if (oldest) sessions.delete(oldest);
+  }
+  sessions.set(sessionId, session);
+}
+
+function consumeRateLimit(key: string): number | null {
+  const now = Date.now();
+  if (now - lastRateLimitPruneAt >= 1_000 || chatRateLimits.size >= MAX_RATE_LIMIT_ENTRIES) {
+    lastRateLimitPruneAt = now;
+    for (const [entryKey, entry] of chatRateLimits) {
+      if (now - entry.windowStartedAt >= RATE_LIMIT_WINDOW_MS) chatRateLimits.delete(entryKey);
+    }
+  }
+
+  // Keep attacker-controlled session IDs from growing this map without bound.
+  if (!chatRateLimits.has(key) && chatRateLimits.size >= MAX_RATE_LIMIT_ENTRIES) {
+    key = "overflow";
+  }
+
+  const existing = chatRateLimits.get(key);
+  if (!existing || now - existing.windowStartedAt >= RATE_LIMIT_WINDOW_MS) {
+    chatRateLimits.set(key, { windowStartedAt: now, count: 1 });
+    return null;
+  }
+
+  if (existing.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return Math.max(1, Math.ceil((existing.windowStartedAt + RATE_LIMIT_WINDOW_MS - now) / 1000));
+  }
+
+  existing.count += 1;
+  return null;
+}
+
+async function readJsonBody(request: Request): Promise<
+  | { ok: true; value: unknown }
+  | { ok: false; status: 400 | 413 }
+> {
+  const contentLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES) {
+    return { ok: false, status: 413 };
+  }
+
+  if (!request.body) return { ok: false, status: 400 };
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > MAX_REQUEST_BYTES) {
+        await reader.cancel();
+        return { ok: false, status: 413 };
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  try {
+    return { ok: true, value: JSON.parse(new TextDecoder().decode(body)) };
+  } catch {
+    return { ok: false, status: 400 };
+  }
+}
 
 function shortSessionId(sessionId: string): string {
   return sessionId.slice(0, 8);
@@ -187,18 +326,45 @@ function persistSessionState(sessionId: string, session: SessionState): void {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { message, sessionId } = body as { message?: string; sessionId?: string };
-
-    if (!message || !sessionId) {
+    const bodyResult = await readJsonBody(request);
+    if (!bodyResult.ok) {
       return NextResponse.json(
-        { error: "缺少 message 或 sessionId" },
-        { status: 400 },
+        { error: bodyResult.status === 413 ? "请求体过大" : "请求体必须是 JSON" },
+        { status: bodyResult.status },
+      );
+    }
+
+    const parsedBody = chatRequestSchema.safeParse(bodyResult.value);
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: "请求格式无效" }, { status: 400 });
+    }
+
+    const { message, sessionId } = parsedBody.data;
+    if (!sessionAuthConfigured()) {
+      return NextResponse.json({ error: "服务端会话安全配置缺失" }, { status: 503 });
+    }
+
+    const sessionBootstrap = request.headers.get("x-session-bootstrap") === "1";
+    const knownSession = sessions.has(sessionId) || getManifest(sessionId).length > 0 || readSessionState(sessionId) !== null;
+    const validSessionCookie = hasValidSessionCookie(request, sessionId);
+    if (knownSession && !validSessionCookie) {
+      return NextResponse.json({ error: "会话已失效，请刷新页面后重试" }, { status: 401 });
+    }
+    if (!sessionBootstrap && hasSessionCookie(request) && !validSessionCookie) {
+      return NextResponse.json({ error: "会话凭据无效" }, { status: 403 });
+    }
+
+    const retryAfter = consumeRateLimit(getRateLimitKey(request));
+    if (retryAfter !== null) {
+      return NextResponse.json(
+        { error: "请求过于频繁，请稍后再试" },
+        { status: 429, headers: { "Retry-After": String(retryAfter) } },
       );
     }
 
     // Get or create session (with disk recovery)
     let session = sessions.get(sessionId);
+    if (session) rememberSession(sessionId, session);
 
     if (!session) {
       // Try to recover from userspace disk
@@ -288,7 +454,7 @@ export async function POST(request: Request) {
         };
       }
 
-      sessions.set(sessionId, session);
+      rememberSession(sessionId, session);
     }
 
     // Append user message
@@ -297,7 +463,7 @@ export async function POST(request: Request) {
       content: message,
       timestamp: Date.now(),
     };
-    session.messages.push(userMsg);
+    appendSessionMessage(session, userMsg);
     const phaseAtStart = session.phase;
     logChatEvent(sessionId, phaseAtStart, "turn_start", {
       mode: "pending",
@@ -324,6 +490,16 @@ export async function POST(request: Request) {
     // Build multi-turn messages
     const aiMessages = buildConversationMessages(systemPrompt, session.messages);
 
+    // Cap the number of upstream calls in one browser turn. A malformed JSON
+    // retry followed by the clarifying-to-planning transition can legitimately
+    // require three bounded calls, but never more than this budget.
+    let aiCallsThisTurn = 0;
+    const callChat = async (options: Parameters<typeof chat>[0]) => {
+      if (aiCallsThisTurn >= MAX_AI_CALLS_PER_TURN) throw new Error("AI call budget exhausted for this turn");
+      aiCallsThisTurn += 1;
+      return chat(options);
+    };
+
     // Call AI (with generous token limit to prevent mid-JSON truncation)
     let aiResult: Awaited<ReturnType<typeof chat>>;
     try {
@@ -332,7 +508,7 @@ export async function POST(request: Request) {
         step: "primary",
         msgs: aiMessages.length,
       });
-      aiResult = await chat({
+      aiResult = await callChat({
         messages: aiMessages,
         temperature: 0.4,
         maxTokens: 4096,
@@ -352,7 +528,7 @@ export async function POST(request: Request) {
         choiceGroups: fallbackChoiceGroups,
         timestamp: Date.now(),
       };
-      session.messages.push(assistantMsg);
+      appendSessionMessage(session, assistantMsg);
 
       if (session.phase === "greeting") {
         session.phase = "profiling";
@@ -382,7 +558,7 @@ export async function POST(request: Request) {
         `[api/chat] sid=${shortSessionId(sessionId)} phase=${session.phase} event=fallback reason=${err instanceof Error ? err.message : String(err)}`,
       );
 
-      return NextResponse.json({
+      const response = NextResponse.json({
         reply: fallback.reply,
         questions: fallback.questions,
         choiceGroups: fallbackChoiceGroups,
@@ -392,7 +568,8 @@ export async function POST(request: Request) {
         phase: session.phase,
         plan: session.plan,
         _fallback: true,
-      });
+      }, { headers: { "Cache-Control": "no-store" } });
+      return setSessionCookie(response, sessionId);
     }
     let parsed = parseJsonFromText(aiResult.content);
 
@@ -409,7 +586,7 @@ export async function POST(request: Request) {
         { role: "assistant" as const, content: aiResult.content },
         { role: "user" as const, content: "上一轮回复不是JSON。请严格按照JSON格式重新输出，以{开头以}结尾。" },
       ];
-      aiResult = await chat({
+      aiResult = await callChat({
         messages: retryMsgs,
         temperature: 0.3,
         maxTokens: 4096,
@@ -520,7 +697,7 @@ export async function POST(request: Request) {
           step: "clarifying_to_planning",
           msgs: planningMessages.length,
         });
-        aiResult = await chat({
+        aiResult = await callChat({
           messages: planningMessages,
           temperature: 0.4,
           maxTokens: 4096,
@@ -635,7 +812,7 @@ export async function POST(request: Request) {
       process,
       timestamp: Date.now(),
     };
-    session.messages.push(assistantMsg);
+    appendSessionMessage(session, assistantMsg);
     logChatEvent(sessionId, nextPhase, "turn_complete", {
       mode: planState || parsed ? "ai" : "ai_text_fallback",
       replyChars: reply.length,
@@ -680,11 +857,14 @@ export async function POST(request: Request) {
       response.plan = planState;
     }
 
-    return NextResponse.json(response);
+    return setSessionCookie(
+      NextResponse.json(response, { headers: { "Cache-Control": "no-store" } }),
+      sessionId,
+    );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const cause = err instanceof Error && err.cause ? ` cause=${String(err.cause)}` : "";
     console.error(`[api/chat] ${msg}${cause}`);
-    return NextResponse.json({ error: `${msg}${cause}` }, { status: 500 });
+    return NextResponse.json({ error: "服务暂时不可用，请稍后再试" }, { status: 500 });
   }
 }

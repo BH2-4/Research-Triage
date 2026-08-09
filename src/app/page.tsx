@@ -19,10 +19,10 @@ type SavedSession = {
 
 function getSessionId(): string {
   if (typeof window === "undefined") return crypto.randomUUID();
-  const saved = sessionStorage.getItem(SESSION_ID_KEY);
+  const saved = localStorage.getItem(SESSION_ID_KEY);
   if (saved) return saved;
   const id = crypto.randomUUID();
-  sessionStorage.setItem(SESSION_ID_KEY, id);
+  localStorage.setItem(SESSION_ID_KEY, id);
   return id;
 }
 
@@ -32,18 +32,21 @@ export default function ChatPage() {
   const [profileConfidence, setProfileConfidence] = useState<Record<string, number>>({});
   const [plan, setPlan] = useState<PlanState | null>(null);
   const [sessionId, setSessionId] = useState("");
+  const [sessionBootstrap, setSessionBootstrap] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fileRefresh, setFileRefresh] = useState(0);
   const [history, setHistory] = useState<
     { messages: ChatMessage[]; profile: UserProfileState | null; profileConfidence: Record<string, number>; plan: PlanState | null }[]
   >([]);
 
-  // Hydration guard: only restore from sessionStorage on client
+  // Hydration guard: only restore from localStorage on client
   useEffect(() => {
+    const existingId = localStorage.getItem(SESSION_ID_KEY);
     const id = getSessionId();
     setSessionId(id);
+    setSessionBootstrap(!existingId);
 
-    const raw = sessionStorage.getItem(SESSION_KEY);
+    const raw = localStorage.getItem(SESSION_KEY);
     if (raw) {
       try {
         const saved = JSON.parse(raw) as SavedSession;
@@ -60,7 +63,7 @@ export default function ChatPage() {
   // Save session after every change
   useEffect(() => {
     if (!sessionId) return;
-    sessionStorage.setItem(
+    localStorage.setItem(
       SESSION_KEY,
       JSON.stringify({ messages, profile, profileConfidence, plan, sessionId }),
     );
@@ -82,9 +85,11 @@ export default function ChatPage() {
       setLoading(true);
 
       try {
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (sessionBootstrap) headers["X-Session-Bootstrap"] = "1";
         const resp = await fetch("/api/chat", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({ message: text, sessionId }),
         });
 
@@ -99,6 +104,7 @@ export default function ChatPage() {
           setMessages((prev) => [...prev, errMsg]);
           return;
         }
+        setSessionBootstrap(false);
 
         const assistantMsg: ChatMessage = {
           role: "assistant",
@@ -137,7 +143,7 @@ export default function ChatPage() {
         setLoading(false);
       }
     },
-    [sessionId, loading, messages, profile, profileConfidence, plan],
+    [sessionId, sessionBootstrap, loading, messages, profile, profileConfidence, plan],
   );
 
   const handleSelect = useCallback(
@@ -148,17 +154,18 @@ export default function ChatPage() {
   );
 
   const handleReset = useCallback(() => {
-    sessionStorage.removeItem(SESSION_KEY);
-    sessionStorage.removeItem(SESSION_ID_KEY);
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_ID_KEY);
     setMessages([]);
     setProfile(null);
     setProfileConfidence({});
     setPlan(null);
     setHistory([]);
     setSessionId("");
+    setSessionBootstrap(true);
     setTimeout(() => {
       const id = crypto.randomUUID();
-      sessionStorage.setItem(SESSION_ID_KEY, id);
+      localStorage.setItem(SESSION_ID_KEY, id);
       setSessionId(id);
     }, 0);
   }, []);

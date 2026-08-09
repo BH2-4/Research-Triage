@@ -44,7 +44,7 @@ describe("userspace", () => {
     );
   });
 
-  it("records code artifact metadata for preview and external opening", () => {
+  it("records code artifact metadata for browser preview", () => {
     const sessionId = `code-${Date.now()}`;
 
     saveCodeFile(sessionId, "code-v1-demo.py", "Python Demo", "python", "print('ok')\n", 1);
@@ -60,6 +60,11 @@ describe("userspace", () => {
         language: "python",
       }),
     );
+  });
+
+  it("enforces a per-file storage limit", () => {
+    expect(() => writeFile(`quota-${Date.now()}`, "too-large.md", "x".repeat(256 * 1024 + 1)))
+      .toThrow(/per-file userspace limit/);
   });
 
   it("records image artifact metadata for preview", () => {

@@ -12,7 +12,12 @@ function escapeHtml(value: string): string {
 function isSafeUrl(value: string): boolean {
   const trimmed = value.trim();
   if (!trimmed) return false;
-  if (trimmed.startsWith("/") || trimmed.startsWith("./")) return true;
+  if (trimmed.startsWith("//")) return false;
+  if (trimmed.startsWith("/") || trimmed.startsWith("./")) {
+    // Browsers normalize backslashes in a path; reject them so `/\\host` can
+    // never become an unintended external URL.
+    return !trimmed.includes("\\");
+  }
   try {
     const url = new URL(trimmed);
     return url.protocol === "http:" || url.protocol === "https:" || url.protocol === "mailto:";
@@ -56,4 +61,3 @@ export function renderMarkdown(markdown: string): string {
     renderer,
   }) as string;
 }
-
