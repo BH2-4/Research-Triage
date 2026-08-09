@@ -3,10 +3,7 @@ import type { NextResponse } from "next/server";
 
 const SESSION_COOKIE = "triage_session";
 const SESSION_COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
-const SESSION_COOKIE_SECRET = process.env.SESSION_COOKIE_SECRET?.trim()
-  || (process.env.NODE_ENV === "production"
-    ? randomBytes(32).toString("hex")
-    : "research-triage-development-only-cookie-secret");
+const SESSION_COOKIE_SECRET = process.env.SESSION_COOKIE_SECRET?.trim() || randomBytes(32).toString("hex");
 
 function signatureFor(payload: string): string {
   return createHmac("sha256", SESSION_COOKIE_SECRET)
