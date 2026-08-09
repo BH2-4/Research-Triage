@@ -106,17 +106,20 @@ export function writeFile(
   content: string,
 ): string {
   pruneExpiredSessions();
-  const fullPath = filePath(sessionId, filename);
+  // Resolve the path without creating a directory. Quota checks must happen
+  // before an attacker can create empty session directories.
+  const fullPath = filePath(sessionId, filename, false);
   const contentBytes = Buffer.byteLength(content, "utf8");
   if (contentBytes > MAX_FILE_BYTES) {
     throw new Error("File exceeds the per-file userspace limit");
   }
 
   const sessionDir = dir(sessionId, false);
+  const sessionExists = existsSync(sessionDir);
   const existingBytes = existsSync(fullPath) ? statSync(fullPath).size : 0;
   const usage = sessionUsage(sessionDir);
   const global = globalUsage();
-  if (global.sessions > MAX_GLOBAL_SESSION_ENTRIES) {
+  if (!sessionExists && global.sessions >= MAX_GLOBAL_SESSION_ENTRIES) {
     throw new Error("Userspace exceeds the global session limit");
   }
   if (global.bytes - existingBytes + contentBytes > MAX_GLOBAL_BYTES) {
@@ -129,6 +132,7 @@ export function writeFile(
     throw new Error("Session exceeds the userspace storage limit");
   }
 
+  if (!sessionExists) mkdirSync(sessionDir, { recursive: true });
   writeFileSync(fullPath, content, "utf-8");
   return fullPath;
 }

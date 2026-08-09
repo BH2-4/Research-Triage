@@ -31,7 +31,7 @@ Research-Triage 是一个科研问题分诊与路径引导系统。它不做通�
 | 样式 | 原生 CSS | 工作台布局、响应式、Markdown/图片预览、多选状态 | 当前未引入 UI 组件库，避免过早增加抽象层。 |
 | AI Provider | OpenAI-compatible `/chat/completions` + 原生 `fetch` | DeepSeek/OpenAI 兼容模型调用 | 不依赖特定 SDK，便于替换 `AI_BASE_URL`、`AI_MODEL`。 |
 | Prompt / Skill | `skills/*.md` + `src/lib/chat-prompts.ts` + `src/lib/skills.ts` | 阶段提示词、方法论注入、按画像选择 skill | Phase 5 已支持 `selectSkills()` 动态裁剪注入。 |
-| 会话状态 | 服务端内存 Map + 前端 `sessionStorage` | 当前浏览器会话、撤销、页面刷新恢复 | MVP 足够；多实例部署前应替换为持久会话存储。 |
+| 会话状态 | 服务端内存 Map + 前端 `localStorage` | 当前浏览器会话、撤销、页面刷新恢复 | MVP 足够；多实例部署前应替换为持久会话存储。 |
 | 文件沉淀 | 本地 `userspace/{sessionId}/` | profile、state、Plan、摘要、清单、路径、代码、图片引用 | 所有用户可见产物统一走 userspace，不新增旁路存储。 |
 | Markdown | `marked` + 自定义安全 renderer | 聊天、Plan、文档富文本预览 | 原始 HTML 会转义，外部链接和图片做基础 URL 限制。 |
 | 校验 | Zod | 旧规则分诊 schema | 保留在 `triage.ts` 相关路径，可继续作为 fallback 基础。 |
@@ -188,7 +188,7 @@ greeting -> profiling -> clarifying -> planning -> reviewing
 
 `POST /api/userspace/{sessionId}/{filename}?action=open` 固定返回 404。公开部署不提供服务器端系统打开能力，用户应使用浏览器预览或下载。
 
-userspace 文件读取需要服务端签发的 HttpOnly `triage_session` Cookie。生产环境必须设置高熵 `SESSION_COOKIE_SECRET`；不要把它放入 `NEXT_PUBLIC_*` 或浏览器代码。
+userspace 文件读取需要服务端签发的 HttpOnly `triage_session` Cookie。Cookie 签名包含签发时间，服务端会拒绝超过 7 天的凭据。生产环境必须设置高熵 `SESSION_COOKIE_SECRET`；本地开发建议在 `.env.local` 设置稳定值以跨重启保留会话。不要把它放入 `NEXT_PUBLIC_*` 或浏览器代码。
 
 ## userspace
 
@@ -214,7 +214,7 @@ userspace/{sessionId}/
 
 `state.json` 保存机器可读会话状态，包括进度、偏好和当前 Prompt/Skill 状态；`profile.md` 继续作为用户可读画像文档。
 
-`userspace/` 已加入 `.gitignore`。本地开发可直接检查文件内容来调试 Plan、画像和代码产物。
+`userspace/` 已加入 `.gitignore`。本地开发可直接检查文件内容来调试 Plan、画像和代码产物。写入层同时限制单文件、单会话和全局目录/容量，并按 7 天 TTL 清理过期会话。
 
 ## 暂停生成能力说明
 

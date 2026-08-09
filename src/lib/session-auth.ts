@@ -3,16 +3,21 @@ import type { NextResponse } from "next/server";
 
 const SESSION_COOKIE = "triage_session";
 const SESSION_COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
-const SESSION_COOKIE_SECRET = process.env.SESSION_COOKIE_SECRET?.trim() || randomBytes(32).toString("hex");
+const SESSION_COOKIE_SECRET = process.env.SESSION_COOKIE_SECRET?.trim()
+  || (process.env.NODE_ENV === "production"
+    ? randomBytes(32).toString("hex")
+    : "research-triage-development-only-cookie-secret");
 
-function signatureFor(sessionId: string): string {
+function signatureFor(payload: string): string {
   return createHmac("sha256", SESSION_COOKIE_SECRET)
-    .update(sessionId)
+    .update(payload)
     .digest("base64url");
 }
 
 function tokenFor(sessionId: string): string {
-  return `${sessionId}.${signatureFor(sessionId)}`;
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const payload = `${sessionId}.${issuedAt}`;
+  return `${payload}.${signatureFor(payload)}`;
 }
 
 function cookieValue(request: Request): string | null {
@@ -35,13 +40,17 @@ export function hasValidSessionCookie(request: Request, sessionId: string): bool
   const token = cookieValue(request);
   if (!token) return false;
 
-  const separator = token.lastIndexOf(".");
-  if (separator <= 0) return false;
-  const tokenSessionId = token.slice(0, separator);
-  const receivedSignature = token.slice(separator + 1);
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  const [tokenSessionId, issuedAtRaw, receivedSignature] = parts;
   if (tokenSessionId !== sessionId || !/^[a-zA-Z0-9_-]{16,128}$/.test(tokenSessionId)) return false;
+  const issuedAt = Number(issuedAtRaw);
+  const now = Math.floor(Date.now() / 1000);
+  if (!Number.isSafeInteger(issuedAt) || issuedAt > now + 60 || now - issuedAt > SESSION_COOKIE_MAX_AGE) {
+    return false;
+  }
 
-  const expected = Buffer.from(signatureFor(tokenSessionId));
+  const expected = Buffer.from(signatureFor(`${tokenSessionId}.${issuedAtRaw}`));
   const received = Buffer.from(receivedSignature);
   return expected.length === received.length && timingSafeEqual(expected, received);
 }

@@ -27,7 +27,6 @@ import {
 } from "../../../lib/chat-prompts";
 import { selectSkills } from "../../../lib/skills";
 import {
-  hasSessionCookie,
   hasValidSessionCookie,
   sessionAuthConfigured,
   setSessionCookie,
@@ -344,14 +343,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "服务端会话安全配置缺失" }, { status: 503 });
     }
 
-    const sessionBootstrap = request.headers.get("x-session-bootstrap") === "1";
     const knownSession = sessions.has(sessionId) || getManifest(sessionId).length > 0 || readSessionState(sessionId) !== null;
     const validSessionCookie = hasValidSessionCookie(request, sessionId);
     if (knownSession && !validSessionCookie) {
       return NextResponse.json({ error: "会话已失效，请刷新页面后重试" }, { status: 401 });
-    }
-    if (!sessionBootstrap && hasSessionCookie(request) && !validSessionCookie) {
-      return NextResponse.json({ error: "会话凭据无效" }, { status: 403 });
     }
 
     const retryAfter = consumeRateLimit(getRateLimitKey(request));

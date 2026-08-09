@@ -32,7 +32,6 @@ export default function ChatPage() {
   const [profileConfidence, setProfileConfidence] = useState<Record<string, number>>({});
   const [plan, setPlan] = useState<PlanState | null>(null);
   const [sessionId, setSessionId] = useState("");
-  const [sessionBootstrap, setSessionBootstrap] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fileRefresh, setFileRefresh] = useState(0);
   const [history, setHistory] = useState<
@@ -41,10 +40,8 @@ export default function ChatPage() {
 
   // Hydration guard: only restore from localStorage on client
   useEffect(() => {
-    const existingId = localStorage.getItem(SESSION_ID_KEY);
     const id = getSessionId();
     setSessionId(id);
-    setSessionBootstrap(!existingId);
 
     const raw = localStorage.getItem(SESSION_KEY);
     if (raw) {
@@ -86,7 +83,6 @@ export default function ChatPage() {
 
       try {
         const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (sessionBootstrap) headers["X-Session-Bootstrap"] = "1";
         const resp = await fetch("/api/chat", {
           method: "POST",
           headers,
@@ -104,8 +100,6 @@ export default function ChatPage() {
           setMessages((prev) => [...prev, errMsg]);
           return;
         }
-        setSessionBootstrap(false);
-
         const assistantMsg: ChatMessage = {
           role: "assistant",
           content: data.reply,
@@ -143,7 +137,7 @@ export default function ChatPage() {
         setLoading(false);
       }
     },
-    [sessionId, sessionBootstrap, loading, messages, profile, profileConfidence, plan],
+    [sessionId, loading, messages, profile, profileConfidence, plan],
   );
 
   const handleSelect = useCallback(
@@ -162,7 +156,6 @@ export default function ChatPage() {
     setPlan(null);
     setHistory([]);
     setSessionId("");
-    setSessionBootstrap(true);
     setTimeout(() => {
       const id = crypto.randomUUID();
       localStorage.setItem(SESSION_ID_KEY, id);

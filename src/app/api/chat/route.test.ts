@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { POST } from "./route";
 import { POST as userspacePost } from "../userspace/[sessionId]/[[...filename]]/route";
+import { writeFile } from "../../../lib/userspace";
 
 describe("POST /api/chat request guards", () => {
   it("rejects oversized streamed request bodies", async () => {
@@ -28,6 +29,25 @@ describe("POST /api/chat request guards", () => {
     }));
 
     expect(response.status).toBe(400);
+  });
+
+  it("does not let a client bootstrap header bypass a known session", async () => {
+    const sessionId = "bootstrap-auth-test-0001";
+    writeFile(sessionId, "state.json", "{}");
+    const response = await POST(new Request("http://localhost/api/chat", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        cookie: "triage_session=stale-session.invalid",
+        "x-session-bootstrap": "1",
+      },
+      body: JSON.stringify({
+        message: "hello",
+        sessionId,
+      }),
+    }));
+
+    expect(response.status).toBe(401);
   });
 
   it("keeps the server-side system-open action disabled, including on localhost", async () => {
